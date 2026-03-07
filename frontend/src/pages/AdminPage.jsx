@@ -38,13 +38,15 @@ export default function AdminPage() {
     setLoading(false)
   }
 
-  async function loadDocuments() {
-    const { data } = await supabase
-      .from('documents')
-      .select('*, folders(name), profiles(full_name)')
-      .order('published_at', { ascending: false })
-    if (data) setDocuments(data)
-  }
+async function loadDocuments() {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*, folders(name)')
+    .order('published_at', { ascending: false })
+  
+  console.log('Documents:', data, 'Erreur:', error)
+  if (data) setDocuments(data)
+}
 
   async function loadFolders() {
     const { data } = await supabase.from('folders').select('*').order('year', { ascending: false })
