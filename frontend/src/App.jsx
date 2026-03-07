@@ -47,7 +47,6 @@ function LoadingScreen() {
 
 function AppRoutes() {
   const { user } = useAuth()
-
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
@@ -76,12 +75,8 @@ export default function App() {
             fontFamily: 'var(--font-body)',
             boxShadow: 'var(--shadow-lg)',
           },
-          success: {
-            iconTheme: { primary: 'var(--success)', secondary: 'var(--bg-card)' },
-          },
-          error: {
-            iconTheme: { primary: 'var(--error)', secondary: 'var(--bg-card)' },
-          },
+          success: { iconTheme: { primary: 'var(--success)', secondary: 'var(--bg-card)' } },
+          error: { iconTheme: { primary: 'var(--error)', secondary: 'var(--bg-card)' } },
         }}
       />
     </AuthProvider>
