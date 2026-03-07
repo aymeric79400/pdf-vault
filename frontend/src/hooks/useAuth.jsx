@@ -33,7 +33,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function loadProfile(userId) {
-    // Requête directe sans RLS pour récupérer le profil
+    // Timeout de sécurité : max 3 secondes
+  const timeout = setTimeout(() => setLoading(false), 3000)
+  
+  try {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, email, full_name, role, is_active')
@@ -45,7 +48,6 @@ export function AuthProvider({ children }) {
     if (data) {
       setProfile(data)
     } else {
-      // Profil absent : le créer manuellement
       const { data: userData } = await supabase.auth.getUser()
       const { data: newProfile } = await supabase
         .from('profiles')
@@ -59,9 +61,14 @@ export function AuthProvider({ children }) {
         .single()
       if (newProfile) setProfile(newProfile)
     }
+  } catch (err) {
+    console.error('Erreur profil:', err)
+  } finally {
+    clearTimeout(timeout)
     setLoading(false)
   }
-
+}
+    
   async function logLogin(userId) {
     try {
       const { deviceType, deviceInfo } = getDeviceInfo()
