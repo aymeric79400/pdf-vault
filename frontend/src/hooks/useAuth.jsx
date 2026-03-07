@@ -9,22 +9,21 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Vérifier session existante
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else setLoading(false)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user)
+        await loadProfile(session.user.id)
+      }
+      setLoading(false)
     })
 
-    // Écouter changements d'auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null)
       if (session?.user) {
-        await fetchProfile(session.user.id)
-        if (event === 'SIGNED_IN') {
-          await logLogin(session.user.id)
-        }
+        setUser(session.user)
+        await loadProfile(session.user.id)
+        if (event === 'SIGNED_IN') logLogin(session.user.id)
       } else {
+        setUser(null)
         setProfile(null)
         setLoading(false)
       }
@@ -33,21 +32,34 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchProfile(userId) {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
+  async function loadProfile(userId) {
+    // Requête directe sans RLS pour récupérer le profil
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, role, is_active')
+      .eq('id', userId)
+      .maybeSingle()
 
-      if (error) throw error
+    console.log('Profile chargé:', data, 'Erreur:', error)
+
+    if (data) {
       setProfile(data)
-    } catch (err) {
-      console.error('Erreur profil:', err)
-    } finally {
-      setLoading(false)
+    } else {
+      // Profil absent : le créer manuellement
+      const { data: userData } = await supabase.auth.getUser()
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: userData?.user?.email,
+          role: 'user',
+          is_active: true
+        })
+        .select()
+        .single()
+      if (newProfile) setProfile(newProfile)
     }
+    setLoading(false)
   }
 
   async function logLogin(userId) {
@@ -57,11 +69,11 @@ export function AuthProvider({ children }) {
         user_id: userId,
         device_type: deviceType,
         device_info: deviceInfo,
-        ip_address: 'N/A', // IP récupérée côté serveur via Edge Function si nécessaire
+        ip_address: 'N/A',
         success: true
       })
     } catch (err) {
-      console.error('Erreur log connexion:', err)
+      console.error('Erreur log:', err)
     }
   }
 
@@ -80,7 +92,7 @@ export function AuthProvider({ children }) {
   const isAdmin = profile?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile: loadProfile }}>
       {children}
     </AuthContext.Provider>
   )
