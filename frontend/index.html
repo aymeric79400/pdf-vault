@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="PDF Vault - Consultation sécurisée de documents PDF" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PDF Vault" />
+
+    <!-- Sécurité -->
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+
+    <title>PDF Vault</title>
+
+    <style>
+      /* Écran de chargement initial */
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        background: #080c14;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        z-index: 9999;
+        transition: opacity 0.3s ease;
+      }
+      #initial-loader.hidden { opacity: 0; pointer-events: none; }
+      .init-logo {
+        width: 56px;
+        height: 56px;
+        background: rgba(212,168,67,0.1);
+        border: 1px solid rgba(212,168,67,0.25);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .init-spinner {
+        width: 28px;
+        height: 28px;
+        border: 2px solid rgba(255,255,255,0.08);
+        border-top-color: #d4a843;
+        border-radius: 50%;
+        animation: s 0.8s linear infinite;
+      }
+      @keyframes s { to { transform: rotate(360deg); } }
+      .init-text {
+        font-family: sans-serif;
+        font-size: 13px;
+        color: #4b5e7a;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Loader initial -->
+    <div id="initial-loader">
+      <div class="init-logo">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect x="4" y="2" width="18" height="24" rx="2" fill="rgba(212,168,67,0.15)" stroke="#d4a843" strokeWidth="1.5"/>
+          <rect x="10" y="6" width="16" height="22" rx="2" fill="rgba(212,168,67,0.08)" stroke="rgba(212,168,67,0.3)" strokeWidth="1.2"/>
+        </svg>
+      </div>
+      <div class="init-spinner"></div>
+      <span class="init-text">PDF Vault</span>
+    </div>
+
+    <div id="root"></div>
+
+    <script>
+      // Cacher le loader initial quand l'app est prête
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const loader = document.getElementById('initial-loader')
+          if (loader) {
+            loader.classList.add('hidden')
+            setTimeout(() => loader.remove(), 300)
+          }
+        }, 500)
+      })
+
+      // Protection globale anti-copie
+      document.addEventListener('copy', (e) => {
+        const selection = window.getSelection()?.toString()
+        if (selection && document.querySelector('.viewer-page')) {
+          e.preventDefault()
+        }
+      })
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
