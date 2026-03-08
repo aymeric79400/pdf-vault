@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase, getDeviceInfo } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -8,7 +8,7 @@ export default function ViewerPage() {
   const { docId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const viewStartRef = { current: Date.now() }
+  const viewStart = useRef(Date.now())
 
   const [docInfo, setDocInfo] = useState(null)
   const [pdfUrl, setPdfUrl] = useState(null)
@@ -38,7 +38,7 @@ export default function ViewerPage() {
   useEffect(() => {
     return () => {
       if (user && docId) {
-        const duration = Math.floor((Date.now() - viewStartRef.current) / 1000)
+        const duration = Math.floor((Date.now() - viewStart.current) / 1000)
         const { deviceType, deviceInfo } = getDeviceInfo()
         supabase.from('document_views').insert({
           document_id: docId,
@@ -87,17 +87,13 @@ export default function ViewerPage() {
   return (
     <div style={{display:'flex',flexDirection:'column',height:'100vh',background:'var(--bg-primary)',userSelect:'none'}}>
 
-      {/* Header */}
       <header style={{
-        display:'flex', alignItems:'center', justifyContent:'space-between',
-        padding:'0 20px', height:56, background:'var(--bg-secondary)',
-        borderBottom:'1px solid var(--border)', flexShrink:0, gap:16
+        display:'flex',alignItems:'center',justifyContent:'space-between',
+        padding:'0 20px',height:56,background:'var(--bg-secondary)',
+        borderBottom:'1px solid var(--border)',flexShrink:0,gap:16
       }}>
         <div style={{display:'flex',alignItems:'center',gap:16,flex:1,minWidth:0}}>
           <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
             Retour
           </button>
           {docInfo && (
@@ -111,23 +107,34 @@ export default function ViewerPage() {
           )}
         </div>
         <div style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-muted)',background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:99,padding:'4px 12px'}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
           Document protégé
         </div>
       </header>
 
-      {/* Contenu */}
       <div style={{flex:1,overflow:'hidden',background:'#1a1f2e',display:'flex',alignItems:'center',justifyContent:'center'}}>
         {loading && (
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,color:'var(--text-secondary)'}}>
-            <div style={{width:36,height:36,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+            <div style={{width:36,height:36,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
             <p>Chargement du document...</p>
           </div>
         )}
 
         {error && (
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,color:'var(--text-secondary)',textAlign:'center',padding:24}}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            <h3 style={{color:'var(--text-primary)'}}>Impossible d'ouvrir ce document</h3>
+            <p style={{fontSize:13}}>{error}</p>
+            <button className="btn btn-secondary" onClick={() => navigate('/dashboard')}>Retour</button>
+          </div>
+        )}
+
+        {!loading && !error && pdfUrl && (
+          <iframe
+            src={pdfUrl + '#toolbar=0&navpanes=0'}
+            style={{width:'100%',height:'100%',border:'none'}}
+            title={docInfo?.title}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
