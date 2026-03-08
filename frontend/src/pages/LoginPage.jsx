@@ -59,15 +59,19 @@ export default function LoginPage() {
         <div className="login-logo">
           <div className="logo-icon">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <rect x="4" y="2" width="18" height="24" rx="2" fill="rgba(212,168,67,0.15)" stroke="#d4a843" strokeWidth="1.5"/>
-              <rect x="10" y="6" width="16" height="22" rx="2" fill="rgba(212,168,67,0.08)" stroke="rgba(212,168,67,0.3)" strokeWidth="1"/>
-              <line x1="8" y1="10" x2="18" y2="10" stroke="#d4a843" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="8" y1="14" x2="18" y2="14" stroke="rgba(212,168,67,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="8" y1="18" x2="14" y2="18" stroke="rgba(212,168,67,0.3)" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="3" y="6" width="26" height="23" rx="3" fill="rgba(212,168,67,0.12)" stroke="#d4a843" strokeWidth="1.5"/>
+              <line x1="3" y1="13" x2="29" y2="13" stroke="#d4a843" strokeWidth="1.5"/>
+              <line x1="10" y1="3" x2="10" y2="9" stroke="#d4a843" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="22" y1="3" x2="22" y2="9" stroke="#d4a843" strokeWidth="2" strokeLinecap="round"/>
+              <rect x="8" y="17" width="4" height="3" rx="1" fill="#d4a843" opacity="0.8"/>
+              <rect x="14" y="17" width="4" height="3" rx="1" fill="#d4a843" opacity="0.5"/>
+              <rect x="20" y="17" width="4" height="3" rx="1" fill="#d4a843" opacity="0.3"/>
+              <rect x="8" y="22" width="4" height="3" rx="1" fill="#d4a843" opacity="0.5"/>
+              <rect x="14" y="22" width="4" height="3" rx="1" fill="#d4a843" opacity="0.3"/>
             </svg>
           </div>
           <div>
-            <h1 className="login-title font-display">PDF Vault</h1>
+            <h1 className="login-title font-display">Planning Viewer</h1>
             <p className="login-subtitle">Espace de consultation sécurisé</p>
           </div>
         </div>
@@ -150,7 +154,11 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="login-version">PDF Vault v1.0 · Sécurisé</div>
+        <div className="login-version">Planning Viewer v1.0 · Sécurisé</div>
+
+        <div className="login-footer-logo">
+          <img src="/logo-aa.png" alt="Logo" className="footer-logo-img" />
+        </div>
       </div>
 
       <style>{`
@@ -297,6 +305,18 @@ export default function LoginPage() {
           color: var(--text-muted);
           letter-spacing: 0.05em;
         }
+        .login-footer-logo {
+          display: flex;
+          justify-content: center;
+          padding-top: 4px;
+        }
+        .footer-logo-img {
+          height: 36px;
+          width: auto;
+          opacity: 0.55;
+          transition: opacity 0.2s;
+        }
+        .footer-logo-img:hover { opacity: 0.85; }
       `}</style>
     </div>
   )
