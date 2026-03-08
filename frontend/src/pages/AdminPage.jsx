@@ -213,15 +213,31 @@ export default function AdminPage() {
     }
   }
 
-  // ── MODIFIER UTILISATEUR ──
   async function updateUser() {
     if (!selectedUser) return
     if (editUserForm.username) {
       const conflict = users.find(u => u.username === editUserForm.username && u.id !== selectedUser.id)
       if (conflict) { toast.error('Cet identifiant est déjà utilisé'); return }
     }
+    if (editUserForm.email) {
+      const conflict = users.find(u => u.email === editUserForm.email && u.id !== selectedUser.id)
+      if (conflict) { toast.error('Cet email est déjà utilisé'); return }
+    }
     setSavingUser(true)
     try {
+      // Changer email si modifié
+      if (editUserForm.email && editUserForm.email !== selectedUser.email) {
+        const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(`${functionsUrl}/create-user`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ user_id: selectedUser.id, email: editUserForm.email })
+        })
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error || 'Erreur changement email')
+      }
+
       await supabase.from('profiles').update({
         full_name: editUserForm.full_name,
         username: editUserForm.username,
@@ -554,7 +570,7 @@ export default function AdminPage() {
                       <td className="td-actions">
                         <button className="btn btn-ghost" onClick={() => {
                           setSelectedUser(u)
-                          setEditUserForm({ full_name: u.full_name || '', username: u.username || '', phone: u.phone || '', role: u.role, is_active: u.is_active })
+                          setEditUserForm({ full_name: u.full_name || '', username: u.username || '', email: u.email || '', phone: u.phone || '', role: u.role, is_active: u.is_active })
                           setEditUserModal(true)
                         }}>Modifier</button>
                         <button className="btn btn-ghost" onClick={() => { setSelectedUser(u); setNewPassword(''); setPasswordModal(true) }}>
@@ -714,8 +730,8 @@ export default function AdminPage() {
             </div>
             <div className="modal-body">
               <div className="user-info-readonly">
-                <span className="info-label">Email (non modifiable)</span>
-                <span className="info-value">{selectedUser.email}</span>
+                <span className="info-label">Identifiant de connexion actuel</span>
+                <span className="info-value">{selectedUser.username || '—'}</span>
               </div>
               <div className="form-grid">
                 <div className="form-group">
@@ -725,6 +741,13 @@ export default function AdminPage() {
                 <div className="form-group">
                   <label className="form-label">Nom complet</label>
                   <input className="input" placeholder="Nom Prénom" value={editUserForm.full_name} onChange={e => setEditUserForm(p=>({...p,full_name:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input className="input" type="email" placeholder="email@exemple.com" value={editUserForm.email} onChange={e => setEditUserForm(p=>({...p,email:e.target.value}))} />
+                  {editUserForm.email !== selectedUser.email && (
+                    <span className="form-hint" style={{color:'var(--warning)'}}>⚠️ L'email sera modifié immédiatement</span>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
