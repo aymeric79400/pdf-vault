@@ -62,11 +62,13 @@ export default function ViewerPage() {
 
       const { data: doc, error: docErr } = await supabase
         .from('documents')
-        .select('*, folders(name)')
+        .select('*, folders(name, is_active)')
         .eq('id', docId)
         .single()
 
       if (docErr || !doc) throw new Error('Document introuvable')
+      if (!doc.is_active) throw new Error('Ce document n\'est plus disponible')
+      if (doc.folder_id && doc.folders?.is_active === false) throw new Error('Ce document n\'est plus disponible')
       setDocInfo(doc)
 
       const { data: urlData, error: urlErr } = await supabase.storage
