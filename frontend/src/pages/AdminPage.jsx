@@ -180,14 +180,15 @@ export default function AdminPage() {
     }
     setSavingUser(true)
     try {
-      const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
-      const { data: { session } } = await supabase.auth.getSession()
-      
+        const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
       const res = await fetch(`${functionsUrl}/create-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`
         },
         body: JSON.stringify({
           email: userForm.email,
@@ -228,10 +229,14 @@ export default function AdminPage() {
       // Changer email si modifié
       if (editUserForm.email && editUserForm.email !== selectedUser.email) {
         const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
-        const { data: { session } } = await supabase.auth.getSession()
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
         const res = await fetch(`${functionsUrl}/create-user`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': anonKey,
+            'Authorization': `Bearer ${anonKey}`
+          },
           body: JSON.stringify({ user_id: selectedUser.id, email: editUserForm.email })
         })
         const result = await res.json()
@@ -266,13 +271,14 @@ export default function AdminPage() {
     setSavingUser(true)
     try {
       const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
-      const { data: { session } } = await supabase.auth.getSession()
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
       const res = await fetch(`${functionsUrl}/create-user`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`
         },
         body: JSON.stringify({ user_id: selectedUser.id, password: newPassword })
       })
