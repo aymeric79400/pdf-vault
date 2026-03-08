@@ -300,6 +300,18 @@ export default function AdminPage() {
     }
   }
 
+  async function toggleDocActive(doc) {
+    await supabase.from('documents').update({ is_active: !doc.is_active }).eq('id', doc.id)
+    toast.success(doc.is_active ? 'Document masqué' : 'Document visible')
+    loadDocuments()
+  }
+
+  async function toggleFolderActive(folder) {
+    await supabase.from('folders').update({ is_active: !folder.is_active }).eq('id', folder.id)
+    toast.success(folder.is_active ? 'Dossier masqué (et ses documents)' : 'Dossier visible')
+    loadFolders()
+  }
+
   async function toggleUserActive(user) {
     await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id)
     toast.success(user.is_active ? 'Utilisateur désactivé' : 'Utilisateur activé')
@@ -481,7 +493,12 @@ export default function AdminPage() {
                       <td><span className="tag blue">v{doc.version}</span></td>
                       <td>{doc.file_size ? `${(doc.file_size/1024/1024).toFixed(1)} Mo` : '—'}</td>
                       <td>{format(new Date(doc.published_at), 'dd/MM/yyyy', { locale: fr })}</td>
-                      <td><span className={`status-dot ${doc.is_active ? 'active' : 'inactive'}`}>{doc.is_active ? 'Actif' : 'Archivé'}</span></td>
+                      <td>
+                        <button className={`toggle-status ${doc.is_active ? 'active' : 'inactive'}`} onClick={() => toggleDocActive(doc)}>
+                          <span className="toggle-dot" />
+                          {doc.is_active ? 'Visible' : 'Masqué'}
+                        </button>
+                      </td>
                       <td className="td-actions">
                         <button className="btn btn-ghost" onClick={() => { setEditDoc(doc); setDocForm({ title: doc.title, description: doc.description || '', folder_id: doc.folder_id || '', file: null }); setUploadModal(true) }}>Modifier</button>
                         <button className="btn btn-danger" onClick={() => deleteDocument(doc)}>Supprimer</button>
@@ -508,13 +525,17 @@ export default function AdminPage() {
               {filteredFolders.map(folder => {
                 const docCount = documents.filter(d => d.folder_id === folder.id).length
                 return (
-                  <div key={folder.id} className="folder-card">
-                    <div className="folder-card-icon">📁</div>
+                  <div key={folder.id} className={`folder-card ${!folder.is_active ? 'folder-card-inactive' : ''}`}>
+                    <div className="folder-card-icon">{folder.is_active ? '📁' : '🔒'}</div>
                     <div className="folder-card-body">
                       <div className="folder-card-name">{folder.name}</div>
                       <div className="folder-card-meta">{folder.year} · {docCount} document{docCount !== 1 ? 's' : ''}</div>
                     </div>
                     <div className="folder-card-actions">
+                      <button className={`toggle-status ${folder.is_active ? 'active' : 'inactive'}`} onClick={() => toggleFolderActive(folder)}>
+                        <span className="toggle-dot" />
+                        {folder.is_active ? 'Visible' : 'Masqué'}
+                      </button>
                       <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year }); setFolderModal(true) }}>Modifier</button>
                       <button className="btn btn-danger" onClick={() => deleteFolder(folder)}>Supprimer</button>
                     </div>
@@ -928,12 +949,19 @@ export default function AdminPage() {
         .status-dot.inactive::before { background:var(--text-muted); }
         .username-code { font-family:monospace; font-size:12px; background:var(--bg-elevated); padding:2px 7px; border-radius:4px; color:var(--accent); }
         .folders-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
-        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px; }
+        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px; transition:all var(--transition); }
+        .folder-card-inactive { opacity:0.55; background:var(--bg-secondary); }
         .folder-card-icon { font-size:32px; flex-shrink:0; }
         .folder-card-body { flex:1; min-width:0; }
         .folder-card-name { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
         .folder-card-meta { font-size:12px; color:var(--text-muted); }
-        .folder-card-actions { display:flex; gap:6px; flex-shrink:0; }
+        .folder-card-actions { display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+        .toggle-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; border:1px solid; font-size:12px; font-weight:500; cursor:pointer; transition:all var(--transition); font-family:var(--font-body); white-space:nowrap; }
+        .toggle-status.active { background:rgba(34,197,94,0.1); border-color:rgba(34,197,94,0.3); color:var(--success); }
+        .toggle-status.active:hover { background:rgba(34,197,94,0.2); }
+        .toggle-status.inactive { background:rgba(156,163,175,0.1); border-color:rgba(156,163,175,0.3); color:var(--text-muted); }
+        .toggle-status.inactive:hover { background:rgba(156,163,175,0.2); }
+        .toggle-dot { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
         .stats-summary { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
         .stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
         .stat-value { font-size:32px; font-weight:800; font-family:var(--font-display); color:var(--accent); line-height:1; margin-bottom:6px; }
