@@ -27,23 +27,26 @@ export default function DashboardPage() {
     })
   }, [])
 
-async function loadData() {
-  try {
-    const [foldersRes, docsRes] = await Promise.all([
-      supabase.from('folders').select('*').order('year', { ascending: false }),
-      supabase
-        .from('documents')
-        .select('*, folders(name, year)')
-        .order('published_at', { ascending: false })
-    ])
-    if (foldersRes.data) setFolders(foldersRes.data)
-    if (docsRes.data) setDocuments(docsRes.data)
-  } catch (err) {
-    toast.error('Erreur lors du chargement')
-  } finally {
-    setLoading(false)
+  async function loadData() {
+    try {
+      const [foldersRes, docsRes] = await Promise.all([
+        supabase.from('folders').select('*').eq('is_active', true).order('year', { ascending: false }),
+        supabase.from('documents').select('*, folders(name, year, is_active)')
+          .eq('is_active', true)
+          .order('published_at', { ascending: false })
+      ])
+
+      if (foldersRes.data) setFolders(foldersRes.data)
+      // Exclure aussi les documents dont le dossier est inactif
+      if (docsRes.data) setDocuments(docsRes.data.filter(doc =>
+        !doc.folder_id || doc.folders?.is_active !== false
+      ))
+    } catch (err) {
+      toast.error('Erreur lors du chargement')
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   async function loadNewDocStatus() {
     const { data } = await supabase
