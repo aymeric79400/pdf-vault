@@ -1011,7 +1011,13 @@ export default function AdminPage() {
         textarea.input { resize:vertical; min-height:80px; }
         select.input { cursor:pointer; }
         code { font-family:monospace; font-size:12px; }
+        .app-footer { position:fixed; bottom:12px; right:16px; z-index:50; pointer-events:none; }
+        .footer-logo-img { height:32px; width:auto; opacity:0.35; transition:opacity 0.2s; pointer-events:all; }
+        .footer-logo-img:hover { opacity:0.7; }
       `}</style>
+      <footer className="app-footer">
+        <img src="/logo-aa.png" alt="Logo" className="footer-logo-img" />
+      </footer>
     </div>
   )
 }
