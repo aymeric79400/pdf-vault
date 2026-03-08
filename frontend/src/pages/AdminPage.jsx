@@ -948,8 +948,8 @@ export default function AdminPage() {
         .status-dot.inactive { color:var(--text-muted); }
         .status-dot.inactive::before { background:var(--text-muted); }
         .username-code { font-family:monospace; font-size:12px; background:var(--bg-elevated); padding:2px 7px; border-radius:4px; color:var(--accent); }
-        .folders-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
-        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 20px; display:flex; align-items:center; gap:14px; transition:all var(--transition); min-width:0; }
+        .folders-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:16px; }
+        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 20px; display:flex; align-items:center; gap:14px; transition:all var(--transition); overflow:hidden; }
         .folder-card-inactive { opacity:0.55; background:var(--bg-secondary); }
         .folder-card-icon { font-size:28px; flex-shrink:0; line-height:1; }
         .folder-card-body { flex:1; min-width:0; overflow:hidden; }
