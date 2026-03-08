@@ -69,6 +69,7 @@ export default function AdminPage() {
 
   // Filtres dossiers
   const [folderSearch, setFolderSearch] = useState('')
+  const [folderStatusFilter, setFolderStatusFilter] = useState('')
   const [folderSort, setFolderSort] = useState({ field: 'year', dir: 'desc' })
 
   // Filtres utilisateurs
@@ -137,15 +138,16 @@ export default function AdminPage() {
     if (docSearch) d = d.filter(x => x.title.toLowerCase().includes(docSearch.toLowerCase()) || (x.description||'').toLowerCase().includes(docSearch.toLowerCase()))
     if (docFolderFilter === '__none__') d = d.filter(x => !x.folder_id)
     else if (docFolderFilter) d = d.filter(x => x.folder_id === docFolderFilter)
-    if (docStatusFilter) d = d.filter(x => docStatusFilter === 'actif' ? x.is_active : !x.is_active)
+    if (docStatusFilter) d = d.filter(x => docStatusFilter === 'visible' ? x.is_active : !x.is_active)
     return applySort(d, docSort)
   }, [documents, docSearch, docFolderFilter, docStatusFilter, docSort])
 
   const filteredFolders = useMemo(() => {
     let d = folders
     if (folderSearch) d = d.filter(x => x.name.toLowerCase().includes(folderSearch.toLowerCase()) || String(x.year).includes(folderSearch))
+    if (folderStatusFilter) d = d.filter(x => folderStatusFilter === 'visible' ? x.is_active : !x.is_active)
     return applySort(d, folderSort)
-  }, [folders, folderSearch, folderSort])
+  }, [folders, folderSearch, folderStatusFilter, folderSort])
 
   const filteredUsers = useMemo(() => {
     let d = users
@@ -468,8 +470,8 @@ export default function AdminPage() {
               </select>
               <select className="filter-select" value={docStatusFilter} onChange={e => setDocStatusFilter(e.target.value)}>
                 <option value="">Tous les statuts</option>
-                <option value="actif">Actif</option>
-                <option value="archive">Archivé</option>
+                <option value="visible">Visible</option>
+                <option value="masque">Masqué</option>
               </select>
               <span className="filter-count">{filteredDocs.length} résultat{filteredDocs.length !== 1 ? 's' : ''}</span>
             </div>
@@ -517,8 +519,11 @@ export default function AdminPage() {
           <div>
             <div className="filters-bar">
               <SearchBar value={folderSearch} onChange={setFolderSearch} placeholder="Rechercher un dossier..." />
-              <button className={`filter-sort-btn ${folderSort.field === 'year' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'year', setFolderSort)}>Année {folderSort.field === 'year' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}</button>
-              <button className={`filter-sort-btn ${folderSort.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'name', setFolderSort)}>Nom {folderSort.field === 'name' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}</button>
+              <select className="filter-select" value={folderStatusFilter} onChange={e => setFolderStatusFilter(e.target.value)}>
+                <option value="">Tous les statuts</option>
+                <option value="visible">Visible</option>
+                <option value="masque">Masqué</option>
+              </select>
               <span className="filter-count">{filteredFolders.length} dossier{filteredFolders.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="data-table-wrapper">
@@ -529,6 +534,7 @@ export default function AdminPage() {
                     <SortHeader label="Nom" field="name" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
                     <SortHeader label="Année" field="year" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
                     <th>Documents</th>
+                    <SortHeader label="Créé le" field="created_at" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
                     <th>Statut</th>
                     <th>Actions</th>
                   </tr>
@@ -542,6 +548,7 @@ export default function AdminPage() {
                         <td className="td-title">{folder.name}</td>
                         <td><span className="tag">{folder.year}</span></td>
                         <td>{docCount} document{docCount !== 1 ? 's' : ''}</td>
+                        <td style={{fontSize:12}}>{folder.created_at ? format(new Date(folder.created_at), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
                         <td>
                           <button className={`toggle-status ${folder.is_active ? 'active' : 'inactive'}`} onClick={() => toggleFolderActive(folder)}>
                             <span className="toggle-dot" />{folder.is_active ? 'Visible' : 'Masqué'}
@@ -555,8 +562,8 @@ export default function AdminPage() {
                     )
                   })}
                   {filteredFolders.length === 0 && (
-                    <tr><td colSpan={6} className="td-empty">
-                      {folderSearch ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
+                    <tr><td colSpan={7} className="td-empty">
+                      {folderSearch || folderStatusFilter ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
                     </td></tr>
                   )}
                 </tbody>
