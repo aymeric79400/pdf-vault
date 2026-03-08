@@ -24,16 +24,15 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
   const active = sortField === field
   return (
     <th className={`sortable ${active ? 'sort-active' : ''}`} onClick={() => onSort(field)}>
-      {label}
-      <span className="sort-icon">
-        {active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
-      </span>
+      {label}<span className="sort-icon">{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}</span>
     </th>
   )
 }
 
+const EMPTY_USER = { email: '', password: '', full_name: '', username: '', phone: '', role: 'user' }
+
 export default function AdminPage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, profile: currentProfile } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('documents')
   const [documents, setDocuments] = useState([])
@@ -41,19 +40,26 @@ export default function AdminPage() {
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState([])
   const [loginHistory, setLoginHistory] = useState([])
-  const [loading, setLoading] = useState(true)
 
   // Modals
   const [uploadModal, setUploadModal] = useState(false)
-  const [userModal, setUserModal] = useState(false)
   const [folderModal, setFolderModal] = useState(false)
+  const [userModal, setUserModal] = useState(false)
+  const [editUserModal, setEditUserModal] = useState(false)
+  const [passwordModal, setPasswordModal] = useState(false)
   const [editDoc, setEditDoc] = useState(null)
   const [editFolder, setEditFolder] = useState(null)
+  const [selectedUser, setSelectedUser] = useState(null)
 
   // Forms
   const [docForm, setDocForm] = useState({ title: '', description: '', folder_id: '', file: null })
   const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear() })
+  const [userForm, setUserForm] = useState(EMPTY_USER)
+  const [editUserForm, setEditUserForm] = useState({})
+  const [newPassword, setNewPassword] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [savingUser, setSavingUser] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   // Filtres documents
   const [docSearch, setDocSearch] = useState('')
@@ -86,9 +92,7 @@ export default function AdminPage() {
   }, [isAdmin])
 
   async function loadAll() {
-    setLoading(true)
     await Promise.all([loadDocuments(), loadFolders(), loadUsers(), loadStats(), loadLoginHistory()])
-    setLoading(false)
   }
 
   async function loadDocuments() {
@@ -112,12 +116,9 @@ export default function AdminPage() {
     if (data) setLoginHistory(data)
   }
 
-  // ── Sort helper ──
   function applySort(arr, { field, dir }) {
     return [...arr].sort((a, b) => {
-      let va = a[field], vb = b[field]
-      if (va === null || va === undefined) va = ''
-      if (vb === null || vb === undefined) vb = ''
+      let va = a[field] ?? '', vb = b[field] ?? ''
       if (typeof va === 'string') va = va.toLowerCase()
       if (typeof vb === 'string') vb = vb.toLowerCase()
       if (va < vb) return dir === 'asc' ? -1 : 1
@@ -130,10 +131,10 @@ export default function AdminPage() {
     setter(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
   }
 
-  // ── Filtered & sorted data ──
+  // Filtered data
   const filteredDocs = useMemo(() => {
     let d = documents
-    if (docSearch) d = d.filter(x => x.title.toLowerCase().includes(docSearch.toLowerCase()) || (x.description || '').toLowerCase().includes(docSearch.toLowerCase()))
+    if (docSearch) d = d.filter(x => x.title.toLowerCase().includes(docSearch.toLowerCase()) || (x.description||'').toLowerCase().includes(docSearch.toLowerCase()))
     if (docFolderFilter === '__none__') d = d.filter(x => !x.folder_id)
     else if (docFolderFilter) d = d.filter(x => x.folder_id === docFolderFilter)
     if (docStatusFilter) d = d.filter(x => docStatusFilter === 'actif' ? x.is_active : !x.is_active)
@@ -148,7 +149,7 @@ export default function AdminPage() {
 
   const filteredUsers = useMemo(() => {
     let d = users
-    if (userSearch) d = d.filter(x => (x.email || '').toLowerCase().includes(userSearch.toLowerCase()) || (x.full_name || '').toLowerCase().includes(userSearch.toLowerCase()))
+    if (userSearch) d = d.filter(x => (x.email||'').toLowerCase().includes(userSearch.toLowerCase()) || (x.full_name||'').toLowerCase().includes(userSearch.toLowerCase()) || (x.username||'').toLowerCase().includes(userSearch.toLowerCase()) || (x.phone||'').includes(userSearch))
     if (userRoleFilter) d = d.filter(x => x.role === userRoleFilter)
     if (userStatusFilter) d = d.filter(x => userStatusFilter === 'actif' ? x.is_active : !x.is_active)
     return applySort(d, userSort)
@@ -162,10 +163,138 @@ export default function AdminPage() {
 
   const filteredConn = useMemo(() => {
     let d = loginHistory
-    if (connSearch) d = d.filter(x => (x.profiles?.email || '').toLowerCase().includes(connSearch.toLowerCase()) || (x.profiles?.full_name || '').toLowerCase().includes(connSearch.toLowerCase()) || (x.ip_address || '').includes(connSearch))
+    if (connSearch) d = d.filter(x => (x.profiles?.email||'').toLowerCase().includes(connSearch.toLowerCase()) || (x.profiles?.full_name||'').toLowerCase().includes(connSearch.toLowerCase()) || (x.ip_address||'').includes(connSearch))
     if (connDeviceFilter) d = d.filter(x => x.device_type === connDeviceFilter)
     return applySort(d, connSort)
   }, [loginHistory, connSearch, connDeviceFilter, connSort])
+
+  // ── CRÉER UTILISATEUR ──
+  async function createUser() {
+    if (!userForm.email || !userForm.password || !userForm.username) {
+      toast.error('Email, identifiant et mot de passe sont requis')
+      return
+    }
+    if (userForm.password.length < 8) {
+      toast.error('Le mot de passe doit faire au moins 8 caractères')
+      return
+    }
+    setSavingUser(true)
+    try {
+      const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const res = await fetch(`${functionsUrl}/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          email: userForm.email,
+          password: userForm.password,
+          full_name: userForm.full_name,
+          username: userForm.username,
+          phone: userForm.phone,
+          role: userForm.role
+        })
+      })
+
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Erreur création')
+
+      toast.success(`Utilisateur "${userForm.username}" créé avec succès !`)
+      setUserModal(false)
+      setUserForm(EMPTY_USER)
+      loadUsers()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  // ── MODIFIER UTILISATEUR ──
+  async function updateUser() {
+    if (!selectedUser) return
+    if (editUserForm.username) {
+      const conflict = users.find(u => u.username === editUserForm.username && u.id !== selectedUser.id)
+      if (conflict) { toast.error('Cet identifiant est déjà utilisé'); return }
+    }
+    setSavingUser(true)
+    try {
+      await supabase.from('profiles').update({
+        full_name: editUserForm.full_name,
+        username: editUserForm.username,
+        phone: editUserForm.phone || null,
+        role: editUserForm.role,
+        is_active: editUserForm.is_active,
+      }).eq('id', selectedUser.id)
+
+      toast.success('Utilisateur mis à jour')
+      setEditUserModal(false)
+      setSelectedUser(null)
+      loadUsers()
+    } catch (err) {
+      toast.error('Erreur: ' + err.message)
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  // ── CHANGER MOT DE PASSE ──
+  async function changePassword() {
+    if (!newPassword || newPassword.length < 8) {
+      toast.error('Le mot de passe doit faire au moins 8 caractères')
+      return
+    }
+    setSavingUser(true)
+    try {
+      const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
+      const { data: { session } } = await supabase.auth.getSession()
+
+      const res = await fetch(`${functionsUrl}/create-user`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ user_id: selectedUser.id, password: newPassword })
+      })
+
+      if (!res.ok) {
+        // Fallback: utiliser l'API admin directement
+        const { error } = await supabase.auth.admin?.updateUserById(selectedUser.id, { password: newPassword })
+        if (error) throw error
+      }
+
+      toast.success('Mot de passe modifié')
+      setPasswordModal(false)
+      setNewPassword('')
+      setSelectedUser(null)
+    } catch (err) {
+      toast.error('Erreur: ' + err.message)
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  async function toggleUserActive(user) {
+    await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id)
+    toast.success(user.is_active ? 'Utilisateur désactivé' : 'Utilisateur activé')
+    loadUsers()
+  }
+
+  async function deleteUser(user) {
+    if (user.id === currentProfile?.id) { toast.error('Vous ne pouvez pas supprimer votre propre compte'); return }
+    if (!confirm(`Supprimer définitivement l'utilisateur "${user.email}" ?`)) return
+    try {
+      await supabase.from('profiles').delete().eq('id', user.id)
+      toast.success('Utilisateur supprimé')
+      loadUsers()
+    } catch (err) {
+      toast.error('Erreur: ' + err.message)
+    }
+  }
 
   // ── DOSSIERS ──
   async function saveFolder() {
@@ -267,12 +396,6 @@ export default function AdminPage() {
     } catch (err) { toast.error('Erreur: ' + err.message) }
   }
 
-  async function toggleUserActive(user) {
-    await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id)
-    toast.success(user.is_active ? 'Utilisateur désactivé' : 'Utilisateur activé')
-    loadUsers()
-  }
-
   const tabIcons = { documents: '📄', dossiers: '📁', utilisateurs: '👥', statistiques: '📊', connexions: '🕐' }
 
   return (
@@ -284,7 +407,7 @@ export default function AdminPage() {
         </div>
         <div className="admin-header-actions">
           <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>+ Nouveau dossier</button>
-          <button className="btn btn-secondary" onClick={() => setUserModal(true)}>+ Créer utilisateur</button>
+          <button className="btn btn-secondary" onClick={() => { setUserForm(EMPTY_USER); setUserModal(true) }}>+ Créer utilisateur</button>
           <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setUploadModal(true) }}>+ Ajouter PDF</button>
         </div>
       </header>
@@ -325,8 +448,7 @@ export default function AdminPage() {
                     <SortHeader label="Version" field="version" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
                     <SortHeader label="Taille" field="file_size" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
                     <SortHeader label="Publié le" field="published_at" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
-                    <th>Statut</th>
-                    <th>Actions</th>
+                    <th>Statut</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -356,12 +478,8 @@ export default function AdminPage() {
           <div>
             <div className="filters-bar">
               <SearchBar value={folderSearch} onChange={setFolderSearch} placeholder="Rechercher un dossier..." />
-              <button className={`filter-sort-btn ${folderSort.field === 'year' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'year', setFolderSort)}>
-                Année {folderSort.field === 'year' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}
-              </button>
-              <button className={`filter-sort-btn ${folderSort.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'name', setFolderSort)}>
-                Nom {folderSort.field === 'name' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}
-              </button>
+              <button className={`filter-sort-btn ${folderSort.field === 'year' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'year', setFolderSort)}>Année {folderSort.field === 'year' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}</button>
+              <button className={`filter-sort-btn ${folderSort.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'name', setFolderSort)}>Nom {folderSort.field === 'name' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}</button>
               <span className="filter-count">{filteredFolders.length} dossier{filteredFolders.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="folders-grid">
@@ -396,7 +514,7 @@ export default function AdminPage() {
         {tab === 'utilisateurs' && (
           <div>
             <div className="filters-bar">
-              <SearchBar value={userSearch} onChange={setUserSearch} placeholder="Rechercher par nom ou email..." />
+              <SearchBar value={userSearch} onChange={setUserSearch} placeholder="Nom, email, identifiant, téléphone..." />
               <select className="filter-select" value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value)}>
                 <option value="">Tous les rôles</option>
                 <option value="admin">Administrateur</option>
@@ -413,8 +531,10 @@ export default function AdminPage() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <SortHeader label="Identifiant" field="username" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
                     <SortHeader label="Nom" field="full_name" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
                     <SortHeader label="Email" field="email" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
+                    <th>Téléphone</th>
                     <th>Rôle</th>
                     <SortHeader label="Créé le" field="created_at" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
                     <th>Statut</th>
@@ -424,17 +544,27 @@ export default function AdminPage() {
                 <tbody>
                   {filteredUsers.map(u => (
                     <tr key={u.id}>
+                      <td><code className="username-code">{u.username || '—'}</code></td>
                       <td className="td-title">{u.full_name || '—'}</td>
-                      <td>{u.email}</td>
+                      <td style={{fontSize:12}}>{u.email}</td>
+                      <td style={{fontSize:12}}>{u.phone || '—'}</td>
                       <td><span className={`tag ${u.role === 'admin' ? 'blue' : ''}`}>{u.role}</span></td>
                       <td>{format(new Date(u.created_at), 'dd/MM/yyyy', { locale: fr })}</td>
                       <td><span className={`status-dot ${u.is_active ? 'active' : 'inactive'}`}>{u.is_active ? 'Actif' : 'Inactif'}</span></td>
                       <td className="td-actions">
-                        <button className="btn btn-ghost" onClick={() => toggleUserActive(u)}>{u.is_active ? 'Désactiver' : 'Activer'}</button>
+                        <button className="btn btn-ghost" onClick={() => {
+                          setSelectedUser(u)
+                          setEditUserForm({ full_name: u.full_name || '', username: u.username || '', phone: u.phone || '', role: u.role, is_active: u.is_active })
+                          setEditUserModal(true)
+                        }}>Modifier</button>
+                        <button className="btn btn-ghost" onClick={() => { setSelectedUser(u); setNewPassword(''); setPasswordModal(true) }}>
+                          🔑 MDP
+                        </button>
+                        <button className="btn btn-danger" onClick={() => deleteUser(u)}>Supprimer</button>
                       </td>
                     </tr>
                   ))}
-                  {filteredUsers.length === 0 && <tr><td colSpan={6} className="td-empty">Aucun résultat</td></tr>}
+                  {filteredUsers.length === 0 && <tr><td colSpan={8} className="td-empty">Aucun résultat</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -486,7 +616,7 @@ export default function AdminPage() {
         {tab === 'connexions' && (
           <div>
             <div className="filters-bar">
-              <SearchBar value={connSearch} onChange={setConnSearch} placeholder="Rechercher par email, nom ou IP..." />
+              <SearchBar value={connSearch} onChange={setConnSearch} placeholder="Email, nom ou IP..." />
               <select className="filter-select" value={connDeviceFilter} onChange={e => setConnDeviceFilter(e.target.value)}>
                 <option value="">Tous les appareils</option>
                 <option value="desktop">Desktop</option>
@@ -501,8 +631,7 @@ export default function AdminPage() {
                   <tr>
                     <SortHeader label="Utilisateur" field="logged_in_at" sortField={connSort.field} sortDir={connSort.dir} onSort={f => toggleSort(connSort, f, setConnSort)} />
                     <SortHeader label="Date" field="logged_in_at" sortField={connSort.field} sortDir={connSort.dir} onSort={f => toggleSort(connSort, f, setConnSort)} />
-                    <th>IP</th>
-                    <th>Appareil</th>
+                    <th>IP</th><th>Appareil</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -522,7 +651,146 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* ── MODAL PDF ── */}
+      {/* ── MODAL: Créer utilisateur ── */}
+      {userModal && (
+        <div className="modal-overlay" onClick={() => setUserModal(false)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="font-display">Créer un utilisateur</h3>
+              <button className="btn btn-ghost" onClick={() => setUserModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Identifiant unique *</label>
+                  <input className="input" placeholder="ex: jdupont" value={userForm.username} onChange={e => setUserForm(p=>({...p,username:e.target.value.toLowerCase().replace(/\s/g,'')}))} />
+                  <span className="form-hint">Utilisé pour la connexion, sans espaces</span>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nom complet</label>
+                  <input className="input" placeholder="Jean Dupont" value={userForm.full_name} onChange={e => setUserForm(p=>({...p,full_name:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email *</label>
+                  <input className="input" type="email" placeholder="jean@exemple.com" value={userForm.email} onChange={e => setUserForm(p=>({...p,email:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Téléphone</label>
+                  <input className="input" type="tel" placeholder="+33 6 00 00 00 00" value={userForm.phone} onChange={e => setUserForm(p=>({...p,phone:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mot de passe * (min. 8 caractères)</label>
+                  <div className="input-with-icon">
+                    <input className="input" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={userForm.password} onChange={e => setUserForm(p=>({...p,password:e.target.value}))} />
+                    <button className="input-icon-btn" onClick={() => setShowPassword(p => !p)} type="button">{showPassword ? '🙈' : '👁️'}</button>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Rôle</label>
+                  <select className="input" value={userForm.role} onChange={e => setUserForm(p=>({...p,role:e.target.value}))}>
+                    <option value="user">Utilisateur</option>
+                    <option value="admin">Administrateur</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setUserModal(false)}>Annuler</button>
+              <button className="btn btn-primary" onClick={createUser} disabled={savingUser}>
+                {savingUser ? 'Création...' : 'Créer l\'utilisateur'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Modifier utilisateur ── */}
+      {editUserModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setEditUserModal(false)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="font-display">Modifier {selectedUser.full_name || selectedUser.email}</h3>
+              <button className="btn btn-ghost" onClick={() => setEditUserModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="user-info-readonly">
+                <span className="info-label">Email (non modifiable)</span>
+                <span className="info-value">{selectedUser.email}</span>
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Identifiant unique</label>
+                  <input className="input" placeholder="identifiant" value={editUserForm.username} onChange={e => setEditUserForm(p=>({...p,username:e.target.value.toLowerCase().replace(/\s/g,'')}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nom complet</label>
+                  <input className="input" placeholder="Nom Prénom" value={editUserForm.full_name} onChange={e => setEditUserForm(p=>({...p,full_name:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Téléphone</label>
+                  <input className="input" type="tel" placeholder="+33 6 00 00 00 00" value={editUserForm.phone} onChange={e => setEditUserForm(p=>({...p,phone:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Rôle</label>
+                  <select className="input" value={editUserForm.role} onChange={e => setEditUserForm(p=>({...p,role:e.target.value}))}>
+                    <option value="user">Utilisateur</option>
+                    <option value="admin">Administrateur</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Statut</label>
+                  <select className="input" value={editUserForm.is_active ? 'actif' : 'inactif'} onChange={e => setEditUserForm(p=>({...p,is_active:e.target.value==='actif'}))}>
+                    <option value="actif">Actif</option>
+                    <option value="inactif">Inactif</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setEditUserModal(false)}>Annuler</button>
+              <button className="btn btn-primary" onClick={updateUser} disabled={savingUser}>
+                {savingUser ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Changer mot de passe ── */}
+      {passwordModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setPasswordModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="font-display">Changer le mot de passe</h3>
+              <button className="btn btn-ghost" onClick={() => setPasswordModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="user-info-readonly">
+                <span className="info-label">Utilisateur</span>
+                <span className="info-value">{selectedUser.full_name || selectedUser.email}</span>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nouveau mot de passe * (min. 8 caractères)</label>
+                <div className="input-with-icon">
+                  <input className="input" type={showPassword ? 'text' : 'password'} placeholder="Nouveau mot de passe" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                  <button className="input-icon-btn" onClick={() => setShowPassword(p=>!p)} type="button">{showPassword ? '🙈' : '👁️'}</button>
+                </div>
+              </div>
+              <div className="modal-info">
+                Le mot de passe sera changé immédiatement. Communiquez-le à l'utilisateur de manière sécurisée.
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setPasswordModal(false)}>Annuler</button>
+              <button className="btn btn-primary" onClick={changePassword} disabled={savingUser}>
+                {savingUser ? 'Modification...' : 'Changer le mot de passe'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: PDF ── */}
       {uploadModal && (
         <div className="modal-overlay" onClick={() => { setUploadModal(false); setEditDoc(null) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -547,7 +815,7 @@ export default function AdminPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Fichier PDF {editDoc ? <span style={{color:'var(--text-muted)',fontWeight:400}}>(laisser vide pour ne pas modifier)</span> : '*'}</label>
+                <label className="form-label">Fichier PDF {editDoc && <span style={{color:'var(--text-muted)',fontWeight:400}}>(laisser vide pour ne pas modifier)</span>}</label>
                 <input type="file" accept="application/pdf" className="input" onChange={e => setDocForm(p=>({...p,file:e.target.files[0]}))} />
               </div>
             </div>
@@ -561,7 +829,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ── MODAL DOSSIER ── */}
+      {/* ── MODAL: Dossier ── */}
       {folderModal && (
         <div className="modal-overlay" onClick={() => { setFolderModal(false); setEditFolder(null) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -587,34 +855,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ── MODAL UTILISATEUR ── */}
-      {userModal && (
-        <div className="modal-overlay" onClick={() => setUserModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="font-display">Créer un utilisateur</h3>
-              <button className="btn btn-ghost" onClick={() => setUserModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="modal-info">
-                Allez dans <strong>Supabase Dashboard → Authentication → Users → Invite user</strong>. L'utilisateur recevra un email pour définir son mot de passe.
-              </div>
-              <div style={{fontSize:13,color:'var(--text-secondary)'}}>
-                Pour lui attribuer le rôle admin :
-                <pre style={{background:'var(--bg-primary)',padding:12,borderRadius:8,marginTop:8,fontSize:12,color:'var(--accent)',overflow:'auto'}}>
-{`UPDATE public.profiles SET role = 'admin'
-WHERE email = 'email@exemple.com';`}
-                </pre>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setUserModal(false)}>Fermer</button>
-              <a className="btn btn-primary" href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Ouvrir Supabase</a>
-            </div>
-          </div>
-        </div>
-      )}
-
       <style>{`
         .admin-page { min-height:100vh; background:var(--bg-primary); display:flex; flex-direction:column; }
         .admin-header { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; background:var(--bg-secondary); border-bottom:1px solid var(--border); gap:16px; flex-wrap:wrap; }
@@ -626,23 +866,16 @@ WHERE email = 'email@exemple.com';`}
         .admin-tab:hover { color:var(--text-primary); }
         .admin-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
         .admin-content { padding:24px 28px; flex:1; }
-
-        /* Filtres */
         .filters-bar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
         .filter-search { display:flex; align-items:center; gap:8px; background:var(--bg-input); border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 14px; min-width:220px; flex:1; max-width:320px; }
         .filter-search svg { color:var(--text-muted); flex-shrink:0; }
         .filter-input { background:transparent; border:none; outline:none; color:var(--text-primary); font-size:13px; font-family:var(--font-body); flex:1; min-width:0; }
         .filter-input::placeholder { color:var(--text-muted); }
-        .filter-clear { background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:12px; padding:0 2px; }
-        .filter-clear:hover { color:var(--text-primary); }
+        .filter-clear { background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:12px; }
         .filter-select { background:var(--bg-input); border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 12px; color:var(--text-secondary); font-size:13px; font-family:var(--font-body); cursor:pointer; outline:none; }
-        .filter-select:focus { border-color:var(--accent); }
         .filter-sort-btn { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 14px; color:var(--text-secondary); font-size:13px; cursor:pointer; font-family:var(--font-body); transition:all var(--transition); }
-        .filter-sort-btn:hover { color:var(--text-primary); }
         .filter-sort-btn.active { background:var(--accent-dim); border-color:var(--accent-border); color:var(--accent); }
         .filter-count { font-size:12px; color:var(--text-muted); margin-left:auto; white-space:nowrap; }
-
-        /* Table */
         .data-table-wrapper { overflow-x:auto; border-radius:var(--radius-lg); border:1px solid var(--border); }
         .data-table { width:100%; border-collapse:collapse; }
         .data-table th { background:var(--bg-secondary); padding:12px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border); white-space:nowrap; }
@@ -650,11 +883,11 @@ WHERE email = 'email@exemple.com';`}
         .data-table th.sortable:hover { color:var(--text-secondary); }
         .data-table th.sort-active { color:var(--accent); }
         .sort-icon { font-size:10px; opacity:0.6; }
-        .data-table td { padding:14px 16px; font-size:13px; color:var(--text-secondary); border-bottom:1px solid var(--border); vertical-align:middle; }
+        .data-table td { padding:12px 16px; font-size:13px; color:var(--text-secondary); border-bottom:1px solid var(--border); vertical-align:middle; }
         .data-table tr:last-child td { border-bottom:none; }
         .data-table tr:hover td { background:var(--bg-elevated); }
-        .td-title { font-weight:500; color:var(--text-primary) !important; max-width:280px; }
-        .td-actions { display:flex; gap:6px; align-items:center; }
+        .td-title { font-weight:500; color:var(--text-primary) !important; max-width:220px; }
+        .td-actions { display:flex; gap:4px; align-items:center; white-space:nowrap; }
         .td-empty { text-align:center; padding:32px !important; color:var(--text-muted); font-style:italic; }
         .tag { display:inline-block; padding:3px 8px; background:var(--bg-elevated); border-radius:99px; font-size:11px; color:var(--text-secondary); }
         .tag.blue { background:var(--blue-dim); color:var(--blue-light); }
@@ -664,41 +897,43 @@ WHERE email = 'email@exemple.com';`}
         .status-dot.active::before { background:var(--success); }
         .status-dot.inactive { color:var(--text-muted); }
         .status-dot.inactive::before { background:var(--text-muted); }
-
-        /* Dossiers */
+        .username-code { font-family:monospace; font-size:12px; background:var(--bg-elevated); padding:2px 7px; border-radius:4px; color:var(--accent); }
         .folders-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
-        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px; transition:all var(--transition); }
-        .folder-card:hover { border-color:var(--border-strong); }
+        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px; }
         .folder-card-icon { font-size:32px; flex-shrink:0; }
         .folder-card-body { flex:1; min-width:0; }
         .folder-card-name { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
         .folder-card-meta { font-size:12px; color:var(--text-muted); }
         .folder-card-actions { display:flex; gap:6px; flex-shrink:0; }
-
-        /* Stats */
         .stats-summary { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
         .stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
         .stat-value { font-size:32px; font-weight:800; font-family:var(--font-display); color:var(--accent); line-height:1; margin-bottom:6px; }
         .stat-label { font-size:13px; color:var(--text-secondary); }
-        .section-title { font-size:16px; font-weight:700; color:var(--text-primary); margin-bottom:16px; }
         .rank { font-weight:700; color:var(--text-muted); }
         .rank.top { color:var(--accent); }
-
-        /* Modals */
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeIn 0.15s ease; }
-        .modal { background:var(--bg-card); border:1px solid var(--border-strong); border-radius:var(--radius-xl); width:100%; max-width:500px; box-shadow:var(--shadow-lg); overflow:hidden; }
-        .modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border); font-size:16px; font-weight:700; color:var(--text-primary); }
-        .modal-body { padding:24px; display:flex; flex-direction:column; gap:16px; }
-        .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:16px 24px; border-top:1px solid var(--border); }
+        .modal { background:var(--bg-card); border:1px solid var(--border-strong); border-radius:var(--radius-xl); width:100%; max-width:500px; box-shadow:var(--shadow-lg); overflow:hidden; max-height:90vh; display:flex; flex-direction:column; }
+        .modal-lg { max-width:680px; }
+        .modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border); font-size:16px; font-weight:700; color:var(--text-primary); flex-shrink:0; }
+        .modal-body { padding:24px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; }
+        .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:16px 24px; border-top:1px solid var(--border); flex-shrink:0; }
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        @media (max-width:600px) { .form-grid { grid-template-columns:1fr; } }
         .form-group { display:flex; flex-direction:column; gap:8px; }
         .form-label { font-size:13px; font-weight:500; color:var(--text-secondary); }
+        .form-hint { font-size:11px; color:var(--text-muted); }
+        .input-with-icon { position:relative; }
+        .input-with-icon .input { padding-right:44px; }
+        .input-icon-btn { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:transparent; border:none; cursor:pointer; font-size:16px; }
+        .user-info-readonly { display:flex; flex-direction:column; gap:4px; padding:12px 14px; background:var(--bg-elevated); border-radius:var(--radius); margin-bottom:4px; }
+        .info-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; }
+        .info-value { font-size:14px; color:var(--text-primary); font-weight:500; }
         .modal-info { padding:12px 14px; background:var(--blue-dim); border:1px solid rgba(59,130,246,0.2); border-radius:var(--radius); font-size:13px; color:var(--blue-light); line-height:1.6; }
         .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; gap:12px; color:var(--text-muted); text-align:center; }
         .empty-state h3 { font-size:18px; color:var(--text-secondary); font-family:var(--font-display); }
         textarea.input { resize:vertical; min-height:80px; }
         select.input { cursor:pointer; }
         code { font-family:monospace; font-size:12px; }
-        pre { font-family:monospace; white-space:pre-wrap; }
       `}</style>
     </div>
   )
