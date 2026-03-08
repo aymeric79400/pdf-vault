@@ -521,34 +521,46 @@ export default function AdminPage() {
               <button className={`filter-sort-btn ${folderSort.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'name', setFolderSort)}>Nom {folderSort.field === 'name' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}</button>
               <span className="filter-count">{filteredFolders.length} dossier{filteredFolders.length !== 1 ? 's' : ''}</span>
             </div>
-            <div className="folders-grid">
-              {filteredFolders.map(folder => {
-                const docCount = documents.filter(d => d.folder_id === folder.id).length
-                return (
-                  <div key={folder.id} className={`folder-card ${!folder.is_active ? 'folder-card-inactive' : ''}`}>
-                    <div className="folder-card-icon">{folder.is_active ? '📁' : '🔒'}</div>
-                    <div className="folder-card-body">
-                      <div className="folder-card-name">{folder.name}</div>
-                      <div className="folder-card-meta">{folder.year} · {docCount} document{docCount !== 1 ? 's' : ''}</div>
-                    </div>
-                    <div className="folder-card-actions">
-                      <button className={`toggle-status ${folder.is_active ? 'active' : 'inactive'}`} onClick={() => toggleFolderActive(folder)}>
-                        <span className="toggle-dot" />
-                        {folder.is_active ? 'Visible' : 'Masqué'}
-                      </button>
-                      <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year }); setFolderModal(true) }}>Modifier</button>
-                      <button className="btn btn-danger" onClick={() => deleteFolder(folder)}>Supprimer</button>
-                    </div>
-                  </div>
-                )
-              })}
-              {filteredFolders.length === 0 && (
-                <div className="empty-state" style={{gridColumn:'1/-1'}}>
-                  <div style={{fontSize:48}}>📁</div>
-                  <h3>{folderSearch ? 'Aucun résultat' : 'Aucun dossier'}</h3>
-                  {!folderSearch && <button className="btn btn-primary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>+ Créer un dossier</button>}
-                </div>
-              )}
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <SortHeader label="Nom" field="name" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
+                    <SortHeader label="Année" field="year" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
+                    <th>Documents</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredFolders.map(folder => {
+                    const docCount = documents.filter(d => d.folder_id === folder.id).length
+                    return (
+                      <tr key={folder.id} className={!folder.is_active ? 'tr-inactive' : ''}>
+                        <td style={{width:32}}>{folder.is_active ? '📁' : '🔒'}</td>
+                        <td className="td-title">{folder.name}</td>
+                        <td><span className="tag">{folder.year}</span></td>
+                        <td>{docCount} document{docCount !== 1 ? 's' : ''}</td>
+                        <td>
+                          <button className={`toggle-status ${folder.is_active ? 'active' : 'inactive'}`} onClick={() => toggleFolderActive(folder)}>
+                            <span className="toggle-dot" />{folder.is_active ? 'Visible' : 'Masqué'}
+                          </button>
+                        </td>
+                        <td className="td-actions">
+                          <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year }); setFolderModal(true) }}>Modifier</button>
+                          <button className="btn btn-danger" onClick={() => deleteFolder(folder)}>Supprimer</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {filteredFolders.length === 0 && (
+                    <tr><td colSpan={6} className="td-empty">
+                      {folderSearch ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -956,6 +968,7 @@ export default function AdminPage() {
         .folder-card-name { font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .folder-card-meta { font-size:12px; color:var(--text-muted); white-space:nowrap; }
         .folder-card-actions { display:flex; gap:6px; flex-shrink:0; align-items:center; }
+        .data-table tr.tr-inactive td { opacity:0.45; }
         .toggle-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; border:1px solid; font-size:12px; font-weight:500; cursor:pointer; transition:all var(--transition); font-family:var(--font-body); white-space:nowrap; }
         .toggle-status.active { background:rgba(34,197,94,0.1); border-color:rgba(34,197,94,0.3); color:var(--success); }
         .toggle-status.active:hover { background:rgba(34,197,94,0.2); }
