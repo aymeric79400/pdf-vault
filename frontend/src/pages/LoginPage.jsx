@@ -20,17 +20,25 @@ export default function LoginPage() {
     }
     setLoading(true)
     try {
-      // Résoudre l'email depuis l'identifiant
-      const { data: emailData, error: emailErr } = await supabase
-        .rpc('get_email_by_username', { p_username: username.toLowerCase().trim() })
+      // Récupérer email + statut depuis l'identifiant
+      const { data, error } = await supabase
+        .rpc('get_user_status', { p_username: username.toLowerCase().trim() })
 
-      if (emailErr || !emailData) {
+      if (error || !data || data.length === 0) {
         toast.error('Identifiant introuvable')
         setLoading(false)
         return
       }
 
-      await signIn(emailData, password)
+      const { email, is_active } = data[0]
+
+      if (!is_active) {
+        toast.error('Votre compte est désactivé, veuillez contacter l\'administrateur', { duration: 6000 })
+        setLoading(false)
+        return
+      }
+
+      await signIn(email, password)
       navigate('/dashboard')
     } catch (err) {
       toast.error('Identifiant ou mot de passe incorrect')
