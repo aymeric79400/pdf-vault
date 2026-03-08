@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -7,6 +7,30 @@ import { fr } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 
 const TABS = ['documents', 'dossiers', 'utilisateurs', 'statistiques', 'connexions']
+
+function SearchBar({ value, onChange, placeholder }) {
+  return (
+    <div className="filter-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input className="filter-input" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} />
+      {value && <button className="filter-clear" onClick={() => onChange('')}>✕</button>}
+    </div>
+  )
+}
+
+function SortHeader({ label, field, sortField, sortDir, onSort }) {
+  const active = sortField === field
+  return (
+    <th className={`sortable ${active ? 'sort-active' : ''}`} onClick={() => onSort(field)}>
+      {label}
+      <span className="sort-icon">
+        {active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
+      </span>
+    </th>
+  )
+}
 
 export default function AdminPage() {
   const { isAdmin } = useAuth()
@@ -28,9 +52,33 @@ export default function AdminPage() {
 
   // Forms
   const [docForm, setDocForm] = useState({ title: '', description: '', folder_id: '', file: null })
-  const [newUser, setNewUser] = useState({ email: '', full_name: '', password: '', role: 'user' })
   const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear() })
   const [uploading, setUploading] = useState(false)
+
+  // Filtres documents
+  const [docSearch, setDocSearch] = useState('')
+  const [docFolderFilter, setDocFolderFilter] = useState('')
+  const [docStatusFilter, setDocStatusFilter] = useState('')
+  const [docSort, setDocSort] = useState({ field: 'published_at', dir: 'desc' })
+
+  // Filtres dossiers
+  const [folderSearch, setFolderSearch] = useState('')
+  const [folderSort, setFolderSort] = useState({ field: 'year', dir: 'desc' })
+
+  // Filtres utilisateurs
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState('')
+  const [userStatusFilter, setUserStatusFilter] = useState('')
+  const [userSort, setUserSort] = useState({ field: 'created_at', dir: 'desc' })
+
+  // Filtres stats
+  const [statsSearch, setStatsSearch] = useState('')
+  const [statsSort, setStatsSort] = useState({ field: 'total_views', dir: 'desc' })
+
+  // Filtres connexions
+  const [connSearch, setConnSearch] = useState('')
+  const [connDeviceFilter, setConnDeviceFilter] = useState('')
+  const [connSort, setConnSort] = useState({ field: 'logged_in_at', dir: 'desc' })
 
   useEffect(() => {
     if (!isAdmin) { navigate('/dashboard'); return }
@@ -44,133 +92,138 @@ export default function AdminPage() {
   }
 
   async function loadDocuments() {
-    const { data } = await supabase
-      .from('documents')
-      .select('*, folders(name)')
-      .order('published_at', { ascending: false })
+    const { data } = await supabase.from('documents').select('*, folders(name)').order('published_at', { ascending: false })
     if (data) setDocuments(data)
   }
-
   async function loadFolders() {
     const { data } = await supabase.from('folders').select('*').order('year', { ascending: false })
     if (data) setFolders(data)
   }
-
   async function loadUsers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
     if (data) setUsers(data)
   }
-
   async function loadStats() {
     const { data } = await supabase.from('document_stats').select('*').order('total_views', { ascending: false })
     if (data) setStats(data)
   }
-
   async function loadLoginHistory() {
-    const { data } = await supabase
-      .from('login_history')
-      .select('*, profiles(email, full_name)')
-      .order('logged_in_at', { ascending: false })
-      .limit(200)
+    const { data } = await supabase.from('login_history').select('*, profiles(email, full_name)').order('logged_in_at', { ascending: false }).limit(500)
     if (data) setLoginHistory(data)
   }
 
-  // ── DOSSIERS ──────────────────────────────────────────────
+  // ── Sort helper ──
+  function applySort(arr, { field, dir }) {
+    return [...arr].sort((a, b) => {
+      let va = a[field], vb = b[field]
+      if (va === null || va === undefined) va = ''
+      if (vb === null || vb === undefined) vb = ''
+      if (typeof va === 'string') va = va.toLowerCase()
+      if (typeof vb === 'string') vb = vb.toLowerCase()
+      if (va < vb) return dir === 'asc' ? -1 : 1
+      if (va > vb) return dir === 'asc' ? 1 : -1
+      return 0
+    })
+  }
+
+  function toggleSort(current, field, setter) {
+    setter(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
+  }
+
+  // ── Filtered & sorted data ──
+  const filteredDocs = useMemo(() => {
+    let d = documents
+    if (docSearch) d = d.filter(x => x.title.toLowerCase().includes(docSearch.toLowerCase()) || (x.description || '').toLowerCase().includes(docSearch.toLowerCase()))
+    if (docFolderFilter === '__none__') d = d.filter(x => !x.folder_id)
+    else if (docFolderFilter) d = d.filter(x => x.folder_id === docFolderFilter)
+    if (docStatusFilter) d = d.filter(x => docStatusFilter === 'actif' ? x.is_active : !x.is_active)
+    return applySort(d, docSort)
+  }, [documents, docSearch, docFolderFilter, docStatusFilter, docSort])
+
+  const filteredFolders = useMemo(() => {
+    let d = folders
+    if (folderSearch) d = d.filter(x => x.name.toLowerCase().includes(folderSearch.toLowerCase()) || String(x.year).includes(folderSearch))
+    return applySort(d, folderSort)
+  }, [folders, folderSearch, folderSort])
+
+  const filteredUsers = useMemo(() => {
+    let d = users
+    if (userSearch) d = d.filter(x => (x.email || '').toLowerCase().includes(userSearch.toLowerCase()) || (x.full_name || '').toLowerCase().includes(userSearch.toLowerCase()))
+    if (userRoleFilter) d = d.filter(x => x.role === userRoleFilter)
+    if (userStatusFilter) d = d.filter(x => userStatusFilter === 'actif' ? x.is_active : !x.is_active)
+    return applySort(d, userSort)
+  }, [users, userSearch, userRoleFilter, userStatusFilter, userSort])
+
+  const filteredStats = useMemo(() => {
+    let d = stats
+    if (statsSearch) d = d.filter(x => x.title.toLowerCase().includes(statsSearch.toLowerCase()))
+    return applySort(d, statsSort)
+  }, [stats, statsSearch, statsSort])
+
+  const filteredConn = useMemo(() => {
+    let d = loginHistory
+    if (connSearch) d = d.filter(x => (x.profiles?.email || '').toLowerCase().includes(connSearch.toLowerCase()) || (x.profiles?.full_name || '').toLowerCase().includes(connSearch.toLowerCase()) || (x.ip_address || '').includes(connSearch))
+    if (connDeviceFilter) d = d.filter(x => x.device_type === connDeviceFilter)
+    return applySort(d, connSort)
+  }, [loginHistory, connSearch, connDeviceFilter, connSort])
+
+  // ── DOSSIERS ──
   async function saveFolder() {
-    if (!folderForm.name || !folderForm.year) {
-      toast.error('Nom et année requis')
-      return
-    }
+    if (!folderForm.name || !folderForm.year) { toast.error('Nom et année requis'); return }
     try {
       if (editFolder) {
-        await supabase.from('folders').update({
-          name: folderForm.name,
-          year: parseInt(folderForm.year)
-        }).eq('id', editFolder.id)
+        await supabase.from('folders').update({ name: folderForm.name, year: parseInt(folderForm.year) }).eq('id', editFolder.id)
         toast.success('Dossier modifié')
       } else {
-        await supabase.from('folders').insert({
-          name: folderForm.name,
-          year: parseInt(folderForm.year)
-        })
+        await supabase.from('folders').insert({ name: folderForm.name, year: parseInt(folderForm.year) })
         toast.success('Dossier créé')
       }
-      setFolderModal(false)
-      setEditFolder(null)
+      setFolderModal(false); setEditFolder(null)
       setFolderForm({ name: '', year: new Date().getFullYear() })
       loadFolders()
-    } catch (err) {
-      toast.error('Erreur: ' + err.message)
-    }
+    } catch (err) { toast.error('Erreur: ' + err.message) }
   }
 
   async function deleteFolder(folder) {
-    const docsInFolder = documents.filter(d => d.folder_id === folder.id).length
-    if (docsInFolder > 0) {
-      if (!confirm(`Ce dossier contient ${docsInFolder} document(s). Les documents seront déplacés hors dossier. Continuer ?`)) return
-      await supabase.from('documents').update({ folder_id: null }).eq('folder_id', folder.id)
-    } else {
-      if (!confirm(`Supprimer le dossier "${folder.name}" ?`)) return
-    }
-    try {
-      await supabase.from('folders').delete().eq('id', folder.id)
-      toast.success('Dossier supprimé')
-      loadAll()
-    } catch (err) {
-      toast.error('Erreur: ' + err.message)
-    }
+    const count = documents.filter(d => d.folder_id === folder.id).length
+    const msg = count > 0
+      ? `Ce dossier contient ${count} document(s) qui seront déplacés hors dossier. Continuer ?`
+      : `Supprimer le dossier "${folder.name}" ?`
+    if (!confirm(msg)) return
+    if (count > 0) await supabase.from('documents').update({ folder_id: null }).eq('folder_id', folder.id)
+    await supabase.from('folders').delete().eq('id', folder.id)
+    toast.success('Dossier supprimé')
+    loadAll()
   }
 
-  // ── DOCUMENTS ─────────────────────────────────────────────
+  // ── DOCUMENTS ──
   async function uploadDocument() {
-    if (!docForm.file || !docForm.title) {
-      toast.error('Titre et fichier PDF requis')
-      return
-    }
+    if (!docForm.file || !docForm.title) { toast.error('Titre et fichier PDF requis'); return }
     setUploading(true)
     try {
       const fileName = `${Date.now()}_${docForm.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const folder = folders.find(f => f.id === docForm.folder_id)
-      const yearPath = folder ? folder.year : 'divers'
-      const filePath = `${yearPath}/${fileName}`
-
-      const { error: uploadErr } = await supabase.storage
-        .from('pdfs')
-        .upload(filePath, docForm.file, { contentType: 'application/pdf' })
+      const filePath = `${folder ? folder.year : 'divers'}/${fileName}`
+      const { error: uploadErr } = await supabase.storage.from('pdfs').upload(filePath, docForm.file, { contentType: 'application/pdf' })
       if (uploadErr) throw uploadErr
-
       const { error: dbErr } = await supabase.from('documents').insert({
-        title: docForm.title,
-        description: docForm.description,
-        folder_id: docForm.folder_id || null,
-        file_path: filePath,
-        file_size: docForm.file.size,
+        title: docForm.title, description: docForm.description,
+        folder_id: docForm.folder_id || null, file_path: filePath, file_size: docForm.file.size,
       })
       if (dbErr) throw dbErr
-
-      // Notifier tous les utilisateurs
-      const { data: activeUsers } = await supabase
-        .from('profiles').select('id').eq('is_active', true).eq('role', 'user')
+      const { data: activeUsers } = await supabase.from('profiles').select('id').eq('is_active', true).eq('role', 'user')
       if (activeUsers?.length) {
-        await supabase.from('notifications').insert(
-          activeUsers.map(u => ({
-            user_id: u.id,
-            type: 'new_document',
-            title: '📄 Nouveau document disponible',
-            message: `"${docForm.title}" a été publié${folder ? ' dans ' + folder.name : ''}`,
-          }))
-        )
+        await supabase.from('notifications').insert(activeUsers.map(u => ({
+          user_id: u.id, type: 'new_document',
+          title: '📄 Nouveau document disponible',
+          message: `"${docForm.title}" a été publié${folder ? ' dans ' + folder.name : ''}`,
+        })))
       }
-
       toast.success('Document publié !')
-      setUploadModal(false)
-      setDocForm({ title: '', description: '', folder_id: '', file: null })
+      setUploadModal(false); setDocForm({ title: '', description: '', folder_id: '', file: null })
       loadAll()
-    } catch (err) {
-      toast.error('Erreur: ' + err.message)
-    } finally {
-      setUploading(false)
-    }
+    } catch (err) { toast.error('Erreur: ' + err.message) }
+    finally { setUploading(false) }
   }
 
   async function updateDocument() {
@@ -180,47 +233,29 @@ export default function AdminPage() {
       let filePath = editDoc.file_path
       if (docForm.file) {
         const folder = folders.find(f => f.id === (docForm.folder_id || editDoc.folder_id))
-        const yearPath = folder ? folder.year : 'divers'
         const fileName = `${Date.now()}_${docForm.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-        filePath = `${yearPath}/${fileName}`
+        filePath = `${folder ? folder.year : 'divers'}/${fileName}`
         await supabase.storage.from('pdfs').upload(filePath, docForm.file, { contentType: 'application/pdf' })
         await supabase.storage.from('pdfs').remove([editDoc.file_path])
       }
-
       await supabase.from('documents').update({
-        title: docForm.title || editDoc.title,
-        description: docForm.description,
-        folder_id: docForm.folder_id || null,
-        file_path: filePath,
+        title: docForm.title || editDoc.title, description: docForm.description,
+        folder_id: docForm.folder_id || null, file_path: filePath,
         version: editDoc.version + (docForm.file ? 1 : 0),
       }).eq('id', editDoc.id)
-
       if (docForm.file) {
-        const { data: viewers } = await supabase
-          .from('document_views').select('user_id').eq('document_id', editDoc.id)
-        const uniqueViewers = [...new Set(viewers?.map(v => v.user_id))]
-        if (uniqueViewers.length) {
-          await supabase.from('notifications').insert(
-            uniqueViewers.map(uid => ({
-              user_id: uid,
-              document_id: editDoc.id,
-              type: 'updated_document',
-              title: '🔄 Document mis à jour',
-              message: `"${docForm.title || editDoc.title}" a été mis à jour`,
-            }))
-          )
-        }
+        const { data: viewers } = await supabase.from('document_views').select('user_id').eq('document_id', editDoc.id)
+        const uniq = [...new Set(viewers?.map(v => v.user_id))]
+        if (uniq.length) await supabase.from('notifications').insert(uniq.map(uid => ({
+          user_id: uid, document_id: editDoc.id, type: 'updated_document',
+          title: '🔄 Document mis à jour', message: `"${docForm.title || editDoc.title}" a été mis à jour`,
+        })))
       }
-
       toast.success('Document mis à jour')
-      setEditDoc(null)
-      setDocForm({ title: '', description: '', folder_id: '', file: null })
-      loadAll()
-    } catch (err) {
-      toast.error('Erreur: ' + err.message)
-    } finally {
-      setUploading(false)
-    }
+      setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null })
+      setUploadModal(false); loadAll()
+    } catch (err) { toast.error('Erreur: ' + err.message) }
+    finally { setUploading(false) }
   }
 
   async function deleteDocument(doc) {
@@ -228,11 +263,8 @@ export default function AdminPage() {
     try {
       await supabase.storage.from('pdfs').remove([doc.file_path])
       await supabase.from('documents').update({ is_active: false }).eq('id', doc.id)
-      toast.success('Document supprimé')
-      loadDocuments()
-    } catch (err) {
-      toast.error('Erreur: ' + err.message)
-    }
+      toast.success('Document supprimé'); loadDocuments()
+    } catch (err) { toast.error('Erreur: ' + err.message) }
   }
 
   async function toggleUserActive(user) {
@@ -241,9 +273,7 @@ export default function AdminPage() {
     loadUsers()
   }
 
-  const tabIcons = {
-    documents: '📄', dossiers: '📁', utilisateurs: '👥', statistiques: '📊', connexions: '🕐'
-  }
+  const tabIcons = { documents: '📄', dossiers: '📁', utilisateurs: '👥', statistiques: '📊', connexions: '🕐' }
 
   return (
     <div className="admin-page">
@@ -253,15 +283,9 @@ export default function AdminPage() {
           <h1 className="font-display admin-title">Administration</h1>
         </div>
         <div className="admin-header-actions">
-          <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>
-            + Nouveau dossier
-          </button>
-          <button className="btn btn-secondary" onClick={() => setUserModal(true)}>
-            + Créer utilisateur
-          </button>
-          <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setUploadModal(true) }}>
-            + Ajouter PDF
-          </button>
+          <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>+ Nouveau dossier</button>
+          <button className="btn btn-secondary" onClick={() => setUserModal(true)}>+ Créer utilisateur</button>
+          <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setUploadModal(true) }}>+ Ajouter PDF</button>
         </div>
       </header>
 
@@ -277,43 +301,71 @@ export default function AdminPage() {
 
         {/* ── DOCUMENTS ── */}
         {tab === 'documents' && (
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr><th>Titre</th><th>Dossier</th><th>Version</th><th>Taille</th><th>Publié le</th><th>Statut</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {documents.map(doc => (
-                  <tr key={doc.id}>
-                    <td className="td-title">{doc.title}</td>
-                    <td><span className="tag">{doc.folders?.name || <em style={{color:'var(--text-muted)'}}>Sans dossier</em>}</span></td>
-                    <td><span className="tag blue">v{doc.version}</span></td>
-                    <td>{doc.file_size ? `${(doc.file_size/1024/1024).toFixed(1)} Mo` : '—'}</td>
-                    <td>{format(new Date(doc.published_at), 'dd/MM/yyyy', { locale: fr })}</td>
-                    <td><span className={`status-dot ${doc.is_active ? 'active' : 'inactive'}`}>{doc.is_active ? 'Actif' : 'Archivé'}</span></td>
-                    <td className="td-actions">
-                      <button className="btn btn-ghost" onClick={() => {
-                        setEditDoc(doc)
-                        setDocForm({ title: doc.title, description: doc.description || '', folder_id: doc.folder_id || '', file: null })
-                        setUploadModal(true)
-                      }}>Modifier</button>
-                      <button className="btn btn-danger" onClick={() => deleteDocument(doc)}>Supprimer</button>
-                    </td>
+          <div>
+            <div className="filters-bar">
+              <SearchBar value={docSearch} onChange={setDocSearch} placeholder="Rechercher un document..." />
+              <select className="filter-select" value={docFolderFilter} onChange={e => setDocFolderFilter(e.target.value)}>
+                <option value="">Tous les dossiers</option>
+                <option value="__none__">Sans dossier</option>
+                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+              <select className="filter-select" value={docStatusFilter} onChange={e => setDocStatusFilter(e.target.value)}>
+                <option value="">Tous les statuts</option>
+                <option value="actif">Actif</option>
+                <option value="archive">Archivé</option>
+              </select>
+              <span className="filter-count">{filteredDocs.length} résultat{filteredDocs.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <SortHeader label="Titre" field="title" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
+                    <th>Dossier</th>
+                    <SortHeader label="Version" field="version" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
+                    <SortHeader label="Taille" field="file_size" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
+                    <SortHeader label="Publié le" field="published_at" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
+                    <th>Statut</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-                {documents.length === 0 && (
-                  <tr><td colSpan={7} style={{textAlign:'center',padding:32,color:'var(--text-muted)'}}>Aucun document</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredDocs.map(doc => (
+                    <tr key={doc.id}>
+                      <td className="td-title">{doc.title}</td>
+                      <td><span className="tag">{doc.folders?.name || <em style={{color:'var(--text-muted)'}}>Sans dossier</em>}</span></td>
+                      <td><span className="tag blue">v{doc.version}</span></td>
+                      <td>{doc.file_size ? `${(doc.file_size/1024/1024).toFixed(1)} Mo` : '—'}</td>
+                      <td>{format(new Date(doc.published_at), 'dd/MM/yyyy', { locale: fr })}</td>
+                      <td><span className={`status-dot ${doc.is_active ? 'active' : 'inactive'}`}>{doc.is_active ? 'Actif' : 'Archivé'}</span></td>
+                      <td className="td-actions">
+                        <button className="btn btn-ghost" onClick={() => { setEditDoc(doc); setDocForm({ title: doc.title, description: doc.description || '', folder_id: doc.folder_id || '', file: null }); setUploadModal(true) }}>Modifier</button>
+                        <button className="btn btn-danger" onClick={() => deleteDocument(doc)}>Supprimer</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredDocs.length === 0 && <tr><td colSpan={7} className="td-empty">Aucun résultat</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {/* ── DOSSIERS ── */}
         {tab === 'dossiers' && (
           <div>
+            <div className="filters-bar">
+              <SearchBar value={folderSearch} onChange={setFolderSearch} placeholder="Rechercher un dossier..." />
+              <button className={`filter-sort-btn ${folderSort.field === 'year' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'year', setFolderSort)}>
+                Année {folderSort.field === 'year' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}
+              </button>
+              <button className={`filter-sort-btn ${folderSort.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort(folderSort, 'name', setFolderSort)}>
+                Nom {folderSort.field === 'name' ? (folderSort.dir === 'asc' ? '↑' : '↓') : '↕'}
+              </button>
+              <span className="filter-count">{filteredFolders.length} dossier{filteredFolders.length !== 1 ? 's' : ''}</span>
+            </div>
             <div className="folders-grid">
-              {folders.map(folder => {
+              {filteredFolders.map(folder => {
                 const docCount = documents.filter(d => d.folder_id === folder.id).length
                 return (
                   <div key={folder.id} className="folder-card">
@@ -323,24 +375,17 @@ export default function AdminPage() {
                       <div className="folder-card-meta">{folder.year} · {docCount} document{docCount !== 1 ? 's' : ''}</div>
                     </div>
                     <div className="folder-card-actions">
-                      <button className="btn btn-ghost" onClick={() => {
-                        setEditFolder(folder)
-                        setFolderForm({ name: folder.name, year: folder.year })
-                        setFolderModal(true)
-                      }}>Modifier</button>
+                      <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year }); setFolderModal(true) }}>Modifier</button>
                       <button className="btn btn-danger" onClick={() => deleteFolder(folder)}>Supprimer</button>
                     </div>
                   </div>
                 )
               })}
-              {folders.length === 0 && (
-                <div className="empty-state">
+              {filteredFolders.length === 0 && (
+                <div className="empty-state" style={{gridColumn:'1/-1'}}>
                   <div style={{fontSize:48}}>📁</div>
-                  <h3>Aucun dossier</h3>
-                  <p>Créez des dossiers pour organiser vos documents par année</p>
-                  <button className="btn btn-primary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>
-                    + Créer un dossier
-                  </button>
+                  <h3>{folderSearch ? 'Aucun résultat' : 'Aucun dossier'}</h3>
+                  {!folderSearch && <button className="btn btn-primary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>+ Créer un dossier</button>}
                 </div>
               )}
             </div>
@@ -349,28 +394,50 @@ export default function AdminPage() {
 
         {/* ── UTILISATEURS ── */}
         {tab === 'utilisateurs' && (
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Créé le</th><th>Statut</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td className="td-title">{u.full_name || '—'}</td>
-                    <td>{u.email}</td>
-                    <td><span className={`tag ${u.role === 'admin' ? 'blue' : ''}`}>{u.role}</span></td>
-                    <td>{format(new Date(u.created_at), 'dd/MM/yyyy', { locale: fr })}</td>
-                    <td><span className={`status-dot ${u.is_active ? 'active' : 'inactive'}`}>{u.is_active ? 'Actif' : 'Inactif'}</span></td>
-                    <td className="td-actions">
-                      <button className="btn btn-ghost" onClick={() => toggleUserActive(u)}>
-                        {u.is_active ? 'Désactiver' : 'Activer'}
-                      </button>
-                    </td>
+          <div>
+            <div className="filters-bar">
+              <SearchBar value={userSearch} onChange={setUserSearch} placeholder="Rechercher par nom ou email..." />
+              <select className="filter-select" value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value)}>
+                <option value="">Tous les rôles</option>
+                <option value="admin">Administrateur</option>
+                <option value="user">Utilisateur</option>
+              </select>
+              <select className="filter-select" value={userStatusFilter} onChange={e => setUserStatusFilter(e.target.value)}>
+                <option value="">Tous les statuts</option>
+                <option value="actif">Actif</option>
+                <option value="inactif">Inactif</option>
+              </select>
+              <span className="filter-count">{filteredUsers.length} utilisateur{filteredUsers.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <SortHeader label="Nom" field="full_name" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
+                    <SortHeader label="Email" field="email" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
+                    <th>Rôle</th>
+                    <SortHeader label="Créé le" field="created_at" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
+                    <th>Statut</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredUsers.map(u => (
+                    <tr key={u.id}>
+                      <td className="td-title">{u.full_name || '—'}</td>
+                      <td>{u.email}</td>
+                      <td><span className={`tag ${u.role === 'admin' ? 'blue' : ''}`}>{u.role}</span></td>
+                      <td>{format(new Date(u.created_at), 'dd/MM/yyyy', { locale: fr })}</td>
+                      <td><span className={`status-dot ${u.is_active ? 'active' : 'inactive'}`}>{u.is_active ? 'Actif' : 'Inactif'}</span></td>
+                      <td className="td-actions">
+                        <button className="btn btn-ghost" onClick={() => toggleUserActive(u)}>{u.is_active ? 'Désactiver' : 'Activer'}</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredUsers.length === 0 && <tr><td colSpan={6} className="td-empty">Aucun résultat</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -383,12 +450,23 @@ export default function AdminPage() {
               <div className="stat-card"><div className="stat-value">{users.filter(u=>u.is_active).length}</div><div className="stat-label">Utilisateurs actifs</div></div>
               <div className="stat-card"><div className="stat-value">{stats.reduce((a,s)=>a+s.total_views,0)}</div><div className="stat-label">Consultations totales</div></div>
             </div>
-            <h3 className="section-title font-display">Documents les plus consultés</h3>
+            <div className="filters-bar">
+              <SearchBar value={statsSearch} onChange={setStatsSearch} placeholder="Rechercher un document..." />
+              <span className="filter-count">{filteredStats.length} document{filteredStats.length !== 1 ? 's' : ''}</span>
+            </div>
             <div className="data-table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Rang</th><th>Document</th><th>Consultations</th><th>Lecteurs uniques</th><th>Dernière vue</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Rang</th>
+                    <SortHeader label="Document" field="title" sortField={statsSort.field} sortDir={statsSort.dir} onSort={f => toggleSort(statsSort, f, setStatsSort)} />
+                    <SortHeader label="Consultations" field="total_views" sortField={statsSort.field} sortDir={statsSort.dir} onSort={f => toggleSort(statsSort, f, setStatsSort)} />
+                    <SortHeader label="Lecteurs uniques" field="unique_viewers" sortField={statsSort.field} sortDir={statsSort.dir} onSort={f => toggleSort(statsSort, f, setStatsSort)} />
+                    <SortHeader label="Dernière vue" field="last_viewed_at" sortField={statsSort.field} sortDir={statsSort.dir} onSort={f => toggleSort(statsSort, f, setStatsSort)} />
+                  </tr>
+                </thead>
                 <tbody>
-                  {stats.map((s,i) => (
+                  {filteredStats.map((s,i) => (
                     <tr key={s.id}>
                       <td><span className={`rank ${i<3?'top':''}`}>#{i+1}</span></td>
                       <td className="td-title">{s.title}</td>
@@ -397,7 +475,7 @@ export default function AdminPage() {
                       <td>{s.last_viewed_at ? format(new Date(s.last_viewed_at),'dd/MM/yyyy HH:mm',{locale:fr}) : '—'}</td>
                     </tr>
                   ))}
-                  {stats.length === 0 && <tr><td colSpan={5} style={{textAlign:'center',padding:32,color:'var(--text-muted)'}}>Aucune consultation enregistrée</td></tr>}
+                  {filteredStats.length === 0 && <tr><td colSpan={5} className="td-empty">Aucune consultation enregistrée</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -406,27 +484,46 @@ export default function AdminPage() {
 
         {/* ── CONNEXIONS ── */}
         {tab === 'connexions' && (
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead><tr><th>Utilisateur</th><th>Date</th><th>IP</th><th>Appareil</th></tr></thead>
-              <tbody>
-                {loginHistory.map(log => (
-                  <tr key={log.id}>
-                    <td>{log.profiles?.email || '—'}<br/><small style={{color:'var(--text-muted)'}}>{log.profiles?.full_name}</small></td>
-                    <td>{format(new Date(log.logged_in_at),'dd/MM/yyyy HH:mm',{locale:fr})}</td>
-                    <td><code>{log.ip_address || '—'}</code></td>
-                    <td><span className="tag">{log.device_type || '—'}</span></td>
+          <div>
+            <div className="filters-bar">
+              <SearchBar value={connSearch} onChange={setConnSearch} placeholder="Rechercher par email, nom ou IP..." />
+              <select className="filter-select" value={connDeviceFilter} onChange={e => setConnDeviceFilter(e.target.value)}>
+                <option value="">Tous les appareils</option>
+                <option value="desktop">Desktop</option>
+                <option value="mobile">Mobile</option>
+                <option value="tablet">Tablette</option>
+              </select>
+              <span className="filter-count">{filteredConn.length} connexion{filteredConn.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <SortHeader label="Utilisateur" field="logged_in_at" sortField={connSort.field} sortDir={connSort.dir} onSort={f => toggleSort(connSort, f, setConnSort)} />
+                    <SortHeader label="Date" field="logged_in_at" sortField={connSort.field} sortDir={connSort.dir} onSort={f => toggleSort(connSort, f, setConnSort)} />
+                    <th>IP</th>
+                    <th>Appareil</th>
                   </tr>
-                ))}
-                {loginHistory.length === 0 && <tr><td colSpan={4} style={{textAlign:'center',padding:32,color:'var(--text-muted)'}}>Aucune connexion enregistrée</td></tr>}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredConn.map(log => (
+                    <tr key={log.id}>
+                      <td>{log.profiles?.email || '—'}<br/><small style={{color:'var(--text-muted)'}}>{log.profiles?.full_name}</small></td>
+                      <td>{format(new Date(log.logged_in_at),'dd/MM/yyyy HH:mm',{locale:fr})}</td>
+                      <td><code>{log.ip_address || '—'}</code></td>
+                      <td><span className="tag">{log.device_type || '—'}</span></td>
+                    </tr>
+                  ))}
+                  {filteredConn.length === 0 && <tr><td colSpan={4} className="td-empty">Aucune connexion enregistrée</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── MODAL: Upload/Modifier PDF ── */}
-      {(uploadModal) && (
+      {/* ── MODAL PDF ── */}
+      {uploadModal && (
         <div className="modal-overlay" onClick={() => { setUploadModal(false); setEditDoc(null) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -464,7 +561,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ── MODAL: Dossier ── */}
+      {/* ── MODAL DOSSIER ── */}
       {folderModal && (
         <div className="modal-overlay" onClick={() => { setFolderModal(false); setEditFolder(null) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -474,25 +571,23 @@ export default function AdminPage() {
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label className="form-label">Nom du dossier *</label>
+                <label className="form-label">Nom *</label>
                 <input className="input" placeholder="ex: Documents 2025" value={folderForm.name} onChange={e => setFolderForm(p=>({...p,name:e.target.value}))} />
               </div>
               <div className="form-group">
                 <label className="form-label">Année *</label>
-                <input className="input" type="number" min="2000" max="2100" placeholder="2025" value={folderForm.year} onChange={e => setFolderForm(p=>({...p,year:e.target.value}))} />
+                <input className="input" type="number" min="2000" max="2100" value={folderForm.year} onChange={e => setFolderForm(p=>({...p,year:e.target.value}))} />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => { setFolderModal(false); setEditFolder(null) }}>Annuler</button>
-              <button className="btn btn-primary" onClick={saveFolder}>
-                {editFolder ? 'Modifier' : 'Créer'}
-              </button>
+              <button className="btn btn-primary" onClick={saveFolder}>{editFolder ? 'Modifier' : 'Créer'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── MODAL: Utilisateur ── */}
+      {/* ── MODAL UTILISATEUR ── */}
       {userModal && (
         <div className="modal-overlay" onClick={() => setUserModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -502,10 +597,10 @@ export default function AdminPage() {
             </div>
             <div className="modal-body">
               <div className="modal-info">
-                Pour créer un utilisateur, allez dans <strong>Supabase Dashboard → Authentication → Users → Invite user</strong>. L'utilisateur recevra un email pour définir son mot de passe.
+                Allez dans <strong>Supabase Dashboard → Authentication → Users → Invite user</strong>. L'utilisateur recevra un email pour définir son mot de passe.
               </div>
-              <div style={{marginTop:8,fontSize:13,color:'var(--text-secondary)'}}>
-                Pour lui attribuer le rôle admin, exécutez ensuite dans SQL Editor :
+              <div style={{fontSize:13,color:'var(--text-secondary)'}}>
+                Pour lui attribuer le rôle admin :
                 <pre style={{background:'var(--bg-primary)',padding:12,borderRadius:8,marginTop:8,fontSize:12,color:'var(--accent)',overflow:'auto'}}>
 {`UPDATE public.profiles SET role = 'admin'
 WHERE email = 'email@exemple.com';`}
@@ -514,9 +609,7 @@ WHERE email = 'email@exemple.com';`}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setUserModal(false)}>Fermer</button>
-              <a className="btn btn-primary" href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">
-                Ouvrir Supabase
-              </a>
+              <a className="btn btn-primary" href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Ouvrir Supabase</a>
             </div>
           </div>
         </div>
@@ -533,14 +626,36 @@ WHERE email = 'email@exemple.com';`}
         .admin-tab:hover { color:var(--text-primary); }
         .admin-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
         .admin-content { padding:24px 28px; flex:1; }
+
+        /* Filtres */
+        .filters-bar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+        .filter-search { display:flex; align-items:center; gap:8px; background:var(--bg-input); border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 14px; min-width:220px; flex:1; max-width:320px; }
+        .filter-search svg { color:var(--text-muted); flex-shrink:0; }
+        .filter-input { background:transparent; border:none; outline:none; color:var(--text-primary); font-size:13px; font-family:var(--font-body); flex:1; min-width:0; }
+        .filter-input::placeholder { color:var(--text-muted); }
+        .filter-clear { background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:12px; padding:0 2px; }
+        .filter-clear:hover { color:var(--text-primary); }
+        .filter-select { background:var(--bg-input); border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 12px; color:var(--text-secondary); font-size:13px; font-family:var(--font-body); cursor:pointer; outline:none; }
+        .filter-select:focus { border-color:var(--accent); }
+        .filter-sort-btn { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 14px; color:var(--text-secondary); font-size:13px; cursor:pointer; font-family:var(--font-body); transition:all var(--transition); }
+        .filter-sort-btn:hover { color:var(--text-primary); }
+        .filter-sort-btn.active { background:var(--accent-dim); border-color:var(--accent-border); color:var(--accent); }
+        .filter-count { font-size:12px; color:var(--text-muted); margin-left:auto; white-space:nowrap; }
+
+        /* Table */
         .data-table-wrapper { overflow-x:auto; border-radius:var(--radius-lg); border:1px solid var(--border); }
         .data-table { width:100%; border-collapse:collapse; }
         .data-table th { background:var(--bg-secondary); padding:12px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+        .data-table th.sortable { cursor:pointer; user-select:none; }
+        .data-table th.sortable:hover { color:var(--text-secondary); }
+        .data-table th.sort-active { color:var(--accent); }
+        .sort-icon { font-size:10px; opacity:0.6; }
         .data-table td { padding:14px 16px; font-size:13px; color:var(--text-secondary); border-bottom:1px solid var(--border); vertical-align:middle; }
         .data-table tr:last-child td { border-bottom:none; }
         .data-table tr:hover td { background:var(--bg-elevated); }
         .td-title { font-weight:500; color:var(--text-primary) !important; max-width:280px; }
         .td-actions { display:flex; gap:6px; align-items:center; }
+        .td-empty { text-align:center; padding:32px !important; color:var(--text-muted); font-style:italic; }
         .tag { display:inline-block; padding:3px 8px; background:var(--bg-elevated); border-radius:99px; font-size:11px; color:var(--text-secondary); }
         .tag.blue { background:var(--blue-dim); color:var(--blue-light); }
         .status-dot { display:inline-flex; align-items:center; gap:5px; font-size:12px; }
@@ -549,6 +664,8 @@ WHERE email = 'email@exemple.com';`}
         .status-dot.active::before { background:var(--success); }
         .status-dot.inactive { color:var(--text-muted); }
         .status-dot.inactive::before { background:var(--text-muted); }
+
+        /* Dossiers */
         .folders-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
         .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px; transition:all var(--transition); }
         .folder-card:hover { border-color:var(--border-strong); }
@@ -557,13 +674,17 @@ WHERE email = 'email@exemple.com';`}
         .folder-card-name { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
         .folder-card-meta { font-size:12px; color:var(--text-muted); }
         .folder-card-actions { display:flex; gap:6px; flex-shrink:0; }
-        .stats-summary { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:28px; }
+
+        /* Stats */
+        .stats-summary { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
         .stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
         .stat-value { font-size:32px; font-weight:800; font-family:var(--font-display); color:var(--accent); line-height:1; margin-bottom:6px; }
         .stat-label { font-size:13px; color:var(--text-secondary); }
         .section-title { font-size:16px; font-weight:700; color:var(--text-primary); margin-bottom:16px; }
         .rank { font-weight:700; color:var(--text-muted); }
         .rank.top { color:var(--accent); }
+
+        /* Modals */
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeIn 0.15s ease; }
         .modal { background:var(--bg-card); border:1px solid var(--border-strong); border-radius:var(--radius-xl); width:100%; max-width:500px; box-shadow:var(--shadow-lg); overflow:hidden; }
         .modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border); font-size:16px; font-weight:700; color:var(--text-primary); }
@@ -571,14 +692,13 @@ WHERE email = 'email@exemple.com';`}
         .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:16px 24px; border-top:1px solid var(--border); }
         .form-group { display:flex; flex-direction:column; gap:8px; }
         .form-label { font-size:13px; font-weight:500; color:var(--text-secondary); }
-        .modal-info { display:flex; flex-direction:column; gap:6px; padding:12px 14px; background:var(--blue-dim); border:1px solid rgba(59,130,246,0.2); border-radius:var(--radius); font-size:13px; color:var(--blue-light); line-height:1.5; }
-        .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; gap:12px; color:var(--text-muted); text-align:center; grid-column:1/-1; }
+        .modal-info { padding:12px 14px; background:var(--blue-dim); border:1px solid rgba(59,130,246,0.2); border-radius:var(--radius); font-size:13px; color:var(--blue-light); line-height:1.6; }
+        .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; gap:12px; color:var(--text-muted); text-align:center; }
         .empty-state h3 { font-size:18px; color:var(--text-secondary); font-family:var(--font-display); }
-        .empty-state p { font-size:13px; }
         textarea.input { resize:vertical; min-height:80px; }
         select.input { cursor:pointer; }
         code { font-family:monospace; font-size:12px; }
-        pre { font-family:monospace; }
+        pre { font-family:monospace; white-space:pre-wrap; }
       `}</style>
     </div>
   )
