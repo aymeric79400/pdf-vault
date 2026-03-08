@@ -674,7 +674,8 @@ export default function AdminPage() {
       </div>
 
       {/* ── MODAL: Créer utilisateur ── */}
-
+      {userModal && (
+        <div className="modal-overlay">
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="font-display">Créer un utilisateur</h3>
@@ -726,7 +727,8 @@ export default function AdminPage() {
       )}
 
       {/* ── MODAL: Modifier utilisateur ── */}
-
+      {editUserModal && selectedUser && (
+        <div className="modal-overlay">
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="font-display">Modifier {selectedUser.full_name || selectedUser.email}</h3>
@@ -784,7 +786,8 @@ export default function AdminPage() {
       )}
 
       {/* ── MODAL: Changer mot de passe ── */}
-
+      {passwordModal && selectedUser && (
+        <div className="modal-overlay">
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="font-display">Changer le mot de passe</h3>
