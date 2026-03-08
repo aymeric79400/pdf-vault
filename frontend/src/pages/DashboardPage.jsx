@@ -90,7 +90,7 @@ export default function DashboardPage() {
               <rect x="10" y="6" width="16" height="22" rx="2" fill="rgba(212,168,67,0.1)" stroke="rgba(212,168,67,0.3)" strokeWidth="1"/>
             </svg>
           </div>
-          <span className="font-display sidebar-brand">PDF Vault</span>
+          <span className="font-display sidebar-brand">Planning Viewer</span>
         </div>
 
         <nav className="sidebar-nav">
@@ -290,6 +290,10 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      <footer className="app-footer">
+        <img src="/logo-aa.png" alt="Logo" className="footer-logo-img" />
+      </footer>
 
       <style>{`
         .dashboard {
@@ -650,6 +654,9 @@ export default function DashboardPage() {
           .topbar { padding: 16px; }
           .search-input { width: 120px; }
         }
+        .app-footer { position:fixed; bottom:12px; right:16px; z-index:50; pointer-events:none; }
+        .footer-logo-img { height:32px; width:auto; opacity:0.35; transition:opacity 0.2s; pointer-events:all; }
+        .footer-logo-img:hover { opacity:0.7; }
       `}</style>
     </div>
   )
