@@ -949,13 +949,13 @@ export default function AdminPage() {
         .status-dot.inactive::before { background:var(--text-muted); }
         .username-code { font-family:monospace; font-size:12px; background:var(--bg-elevated); padding:2px 7px; border-radius:4px; color:var(--accent); }
         .folders-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
-        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px; transition:all var(--transition); }
+        .folder-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 20px; display:flex; align-items:center; gap:14px; transition:all var(--transition); min-width:0; }
         .folder-card-inactive { opacity:0.55; background:var(--bg-secondary); }
-        .folder-card-icon { font-size:32px; flex-shrink:0; }
-        .folder-card-body { flex:1; min-width:0; }
-        .folder-card-name { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
-        .folder-card-meta { font-size:12px; color:var(--text-muted); }
-        .folder-card-actions { display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+        .folder-card-icon { font-size:28px; flex-shrink:0; line-height:1; }
+        .folder-card-body { flex:1; min-width:0; overflow:hidden; }
+        .folder-card-name { font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .folder-card-meta { font-size:12px; color:var(--text-muted); white-space:nowrap; }
+        .folder-card-actions { display:flex; gap:6px; flex-shrink:0; align-items:center; }
         .toggle-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; border:1px solid; font-size:12px; font-weight:500; cursor:pointer; transition:all var(--transition); font-family:var(--font-body); white-space:nowrap; }
         .toggle-status.active { background:rgba(34,197,94,0.1); border-color:rgba(34,197,94,0.3); color:var(--success); }
         .toggle-status.active:hover { background:rgba(34,197,94,0.2); }
