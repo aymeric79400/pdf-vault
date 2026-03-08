@@ -3,13 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase, getDeviceInfo } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
-import * as pdfjsLib from 'pdfjs-dist'
-
-// Configurer PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString()
+// PDF.js chargé dynamiquement
 
 export default function ViewerPage() {
   const { docId } = useParams()
@@ -102,16 +96,14 @@ export default function ViewerPage() {
 
       if (urlErr || !urlData?.signedUrl) throw new Error('Accès au fichier refusé')
 
-      // Charger le PDF
-      const loadingTask = pdfjsLib.getDocument({
-        url: urlData.signedUrl,
-        disableAutoFetch: false,
-        disableStream: false,
-      })
+// Charger PDF.js dynamiquement
+const pdfjsLib = await import('pdfjs-dist')
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
-      const pdf = await loadingTask.promise
-      setPdfDoc(pdf)
-      setTotalPages(pdf.numPages)
+const loadingTask = pdfjsLib.getDocument({ url: urlData.signedUrl })
+const pdf = await loadingTask.promise
+setPdfDoc(pdf)
+setTotalPages(pdf.numPages)
     } catch (err) {
       console.error(err)
       setError(err.message)
