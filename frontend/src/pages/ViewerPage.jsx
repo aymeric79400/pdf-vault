@@ -137,6 +137,9 @@ export default function ViewerPage() {
           />
         )}
       </div>
+      <footer style={{position:'fixed',bottom:12,right:16,zIndex:50,pointerEvents:'none'}}>
+        <img src="/logo-aa.png" alt="Logo" style={{height:32,width:'auto',opacity:0.3,pointerEvents:'all'}} />
+      </footer>
     </div>
   )
 }
