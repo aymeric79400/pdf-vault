@@ -41,15 +41,8 @@ function LoadingScreen() {
 
 function AppRoutes() {
   const { user, loading } = useAuth()
-  const [timedOut, setTimedOut] = useState(false)
 
-  useEffect(() => {
-    if (!loading) return
-    const t = setTimeout(() => setTimedOut(true), 3000)
-    return () => clearTimeout(t)
-  }, [loading])
-
-  if (loading && !timedOut) return <LoadingScreen />
+  if (loading) return <LoadingScreen />
 
   return (
     <Routes>
