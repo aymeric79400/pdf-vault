@@ -323,20 +323,27 @@ export default function AdminPage() {
   async function deleteUser(user) {
     if (user.id === currentProfile?.id) { toast.error('Vous ne pouvez pas supprimer votre propre compte'); return }
     if (!confirm(`Supprimer définitivement l'utilisateur "${user.email}" ?`)) return
+    // Retrait immédiat de l'UI
+    setUsers(prev => prev.filter(u => u.id !== user.id))
     try {
       const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-      await fetch(`${functionsUrl}/create-user`, {
+      const res = await fetch(`${functionsUrl}/create-user`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` },
         body: JSON.stringify({ user_id: user.id })
       })
+      if (!res.ok) {
+        const err = await res.json()
+        console.error('Edge function error:', err)
+      }
       await supabase.from('profiles').delete().eq('id', user.id)
-      // Mettre à jour la liste localement immédiatement
-      setUsers(prev => prev.filter(u => u.id !== user.id))
       toast.success('Utilisateur supprimé')
     } catch (err) {
-      toast.error('Erreur: ' + err.message)
+      console.error('deleteUser error:', err)
+      toast.error('Erreur lors de la suppression: ' + err.message)
+      // En cas d'erreur, recharger la vraie liste
+      loadUsers()
     }
   }
 
