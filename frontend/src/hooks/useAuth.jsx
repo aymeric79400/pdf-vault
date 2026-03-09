@@ -9,66 +9,66 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
+    let mounted = true
+
+    async function init() {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (!mounted) return
+        if (error || !session?.user) {
+          setLoading(false)
+          return
+        }
         setUser(session.user)
-        await loadProfile(session.user.id)
+        await fetchProfile(session.user.id)
+      } catch (err) {
+        console.error('Init session error:', err)
+        if (mounted) setLoading(false)
       }
-      setLoading(false)
-    })
+    }
+
+    init()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-        await loadProfile(session.user.id)
-        if (event === 'SIGNED_IN') logLogin(session.user.id)
-      } else {
+      if (!mounted) return
+      if (event === 'SIGNED_OUT') {
         setUser(null)
         setProfile(null)
         setLoading(false)
+        return
+      }
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user)
+        await fetchProfile(session.user.id)
+        await logLogin(session.user.id)
+      }
+      if (event === 'TOKEN_REFRESHED' && session?.user) {
+        setUser(session.user)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
-  async function loadProfile(userId) {
-    // Timeout de sécurité : max 3 secondes
-  const timeout = setTimeout(() => setLoading(false), 3000)
-  
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, role, is_active')
-      .eq('id', userId)
-      .maybeSingle()
-
-    console.log('Profile chargé:', data, 'Erreur:', error)
-
-    if (data) {
-      setProfile(data)
-    } else {
-      const { data: userData } = await supabase.auth.getUser()
-      const { data: newProfile } = await supabase
+  async function fetchProfile(userId) {
+    try {
+      const { data, error } = await supabase
         .from('profiles')
-        .insert({
-          id: userId,
-          email: userData?.user?.email,
-          role: 'user',
-          is_active: true
-        })
-        .select()
+        .select('*')
+        .eq('id', userId)
         .single()
-      if (newProfile) setProfile(newProfile)
+      if (error) throw error
+      setProfile(data)
+    } catch (err) {
+      console.error('Erreur profil:', err)
+    } finally {
+      setLoading(false)
     }
-  } catch (err) {
-    console.error('Erreur profil:', err)
-  } finally {
-    clearTimeout(timeout)
-    setLoading(false)
   }
-}
-    
+
   async function logLogin(userId) {
     try {
       const { deviceType, deviceInfo } = getDeviceInfo()
@@ -80,7 +80,7 @@ export function AuthProvider({ children }) {
         success: true
       })
     } catch (err) {
-      console.error('Erreur log:', err)
+      console.error('Erreur log connexion:', err)
     }
   }
 
@@ -99,7 +99,7 @@ export function AuthProvider({ children }) {
   const isAdmin = profile?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile: loadProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )
