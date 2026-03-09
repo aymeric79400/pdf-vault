@@ -6,36 +6,63 @@ const AuthContext = createContext({})
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(false) // false dès le départ !
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // Vérifier session en arrière-plan sans bloquer l'UI
+    // Init session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user)
-        try {
-          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-          if (data) setProfile(data)
-        } catch {}
+        fetchProfile(session.user.id)
       }
     }).catch(() => {})
 
+    // Auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user)
-        try {
-          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-          if (data) setProfile(data)
-        } catch {}
-        await logLogin(session.user.id)
+        fetchProfile(session.user.id)
+        logLogin(session.user.id)
+      }
+      if (event === 'TOKEN_REFRESHED' && session?.user) {
+        setUser(session.user)
       }
       if (event === 'SIGNED_OUT') {
         setUser(null); setProfile(null)
       }
     })
 
-    return () => subscription.unsubscribe()
+    // Rafraîchir le token quand l'onglet redevient visible
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) {
+            setUser(session.user)
+          } else {
+            // Session expirée pendant l'inactivité
+            setUser(null); setProfile(null)
+          }
+        }).catch(() => {})
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
+
+  async function fetchProfile(userId) {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (error) throw error
+      setProfile(data)
+    } catch (err) {
+      console.error('fetchProfile:', err)
+    }
+  }
 
   async function logLogin(userId) {
     try {
@@ -58,7 +85,7 @@ export function AuthProvider({ children }) {
   const isAdmin = profile?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile: async () => {} }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )
