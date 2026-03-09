@@ -6,74 +6,41 @@ const AuthContext = createContext({})
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // false dès le départ !
 
   useEffect(() => {
-    let mounted = true
-    let resolved = false
-
-    function done() {
-      if (mounted && !resolved) {
-        resolved = true
-        setLoading(false)
-      }
-    }
-
-    // Timeout absolu 4s — si rien ne répond, on affiche login
-    const timer = setTimeout(done, 4000)
-
+    // Vérifier session en arrière-plan sans bloquer l'UI
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!mounted) return
-      clearTimeout(timer)
       if (session?.user) {
         setUser(session.user)
         try {
-          const { data } = await supabase
-            .from('profiles').select('*').eq('id', session.user.id).single()
-          if (mounted && data) setProfile(data)
-        } catch (e) {
-          console.error('profile error:', e)
-        }
+          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          if (data) setProfile(data)
+        } catch {}
       }
-      done()
-    }).catch((e) => {
-      console.error('getSession error:', e)
-      clearTimeout(timer)
-      done()
-    })
+    }).catch(() => {})
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return
       if (event === 'SIGNED_IN' && session?.user) {
-        clearTimeout(timer)
         setUser(session.user)
         try {
-          const { data } = await supabase
-            .from('profiles').select('*').eq('id', session.user.id).single()
-          if (mounted && data) setProfile(data)
+          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          if (data) setProfile(data)
         } catch {}
         await logLogin(session.user.id)
-        done()
       }
       if (event === 'SIGNED_OUT') {
-        setUser(null); setProfile(null); done()
+        setUser(null); setProfile(null)
       }
     })
 
-    return () => {
-      mounted = false
-      clearTimeout(timer)
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [])
 
   async function logLogin(userId) {
     try {
       const { deviceType, deviceInfo } = getDeviceInfo()
-      await supabase.from('login_history').insert({
-        user_id: userId, device_type: deviceType,
-        device_info: deviceInfo, ip_address: 'N/A', success: true
-      })
+      await supabase.from('login_history').insert({ user_id: userId, device_type: deviceType, device_info: deviceInfo, ip_address: 'N/A', success: true })
     } catch {}
   }
 
