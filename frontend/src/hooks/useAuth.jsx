@@ -10,14 +10,17 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true
+    let resolved = false
 
-    // Race: getSession vs timeout 2s
-    const timer = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth timeout')
+    function done() {
+      if (mounted && !resolved) {
+        resolved = true
         setLoading(false)
       }
-    }, 2000)
+    }
+
+    // Timeout absolu 4s — si rien ne répond, on affiche login
+    const timer = setTimeout(done, 4000)
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return
@@ -25,29 +28,35 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user)
         try {
-          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          const { data } = await supabase
+            .from('profiles').select('*').eq('id', session.user.id).single()
           if (mounted && data) setProfile(data)
-        } catch {}
+        } catch (e) {
+          console.error('profile error:', e)
+        }
       }
-      if (mounted) setLoading(false)
-    }).catch(() => {
-      if (mounted) setLoading(false)
+      done()
+    }).catch((e) => {
+      console.error('getSession error:', e)
+      clearTimeout(timer)
+      done()
     })
 
-    // Auth changes après init
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
       if (event === 'SIGNED_IN' && session?.user) {
+        clearTimeout(timer)
         setUser(session.user)
         try {
-          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-          if (data) setProfile(data)
+          const { data } = await supabase
+            .from('profiles').select('*').eq('id', session.user.id).single()
+          if (mounted && data) setProfile(data)
         } catch {}
         await logLogin(session.user.id)
-        setLoading(false)
+        done()
       }
       if (event === 'SIGNED_OUT') {
-        setUser(null); setProfile(null); setLoading(false)
+        setUser(null); setProfile(null); done()
       }
     })
 
@@ -61,7 +70,10 @@ export function AuthProvider({ children }) {
   async function logLogin(userId) {
     try {
       const { deviceType, deviceInfo } = getDeviceInfo()
-      await supabase.from('login_history').insert({ user_id: userId, device_type: deviceType, device_info: deviceInfo, ip_address: 'N/A', success: true })
+      await supabase.from('login_history').insert({
+        user_id: userId, device_type: deviceType,
+        device_info: deviceInfo, ip_address: 'N/A', success: true
+      })
     } catch {}
   }
 
