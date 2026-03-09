@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useNotifications } from '../hooks/useNotifications'
@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const { profile, isAdmin, signOut } = useAuth()
   const { notifications, unreadCount, markAsRead, markAllAsRead, requestPushPermission, subscribePush } = useNotifications()
   const navigate = useNavigate()
+  const location = useLocation()
   const [folders, setFolders] = useState([])
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,7 +26,7 @@ export default function DashboardPage() {
     requestPushPermission().then(granted => {
       if (granted) subscribePush()
     })
-  }, [])
+  }, [location.key])
 
   async function loadData() {
     try {
