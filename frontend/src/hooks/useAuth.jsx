@@ -11,37 +11,36 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
-    async function init() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          setUser(session.user)
-          await fetchProfile(session.user.id)
-        } else {
-          setLoading(false)
-        }
-      } catch (err) {
-        console.error('Init error:', err)
-        if (mounted) setLoading(false)
-      }
-    }
-
-    init()
+    // Timeout de sécurité absolu — 3s max
+    const safetyTimeout = setTimeout(() => {
+      if (mounted) setLoading(false)
+    }, 3000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
-      if (event === 'SIGNED_IN' && session?.user) {
+      clearTimeout(safetyTimeout)
+
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        setUser(null); setProfile(null); setLoading(false)
+        return
+      }
+      if (session?.user) {
         setUser(session.user)
         await fetchProfile(session.user.id)
-        await logLogin(session.user.id)
-      }
-      if (event === 'SIGNED_OUT') {
-        setUser(null); setProfile(null); setLoading(false)
+        if (event === 'SIGNED_IN') await logLogin(session.user.id)
       }
     })
 
-    return () => { mounted = false; subscription.unsubscribe() }
+    // getSession déclenche onAuthStateChange
+    supabase.auth.getSession().catch(() => {
+      if (mounted) setLoading(false)
+    })
+
+    return () => {
+      mounted = false
+      clearTimeout(safetyTimeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function fetchProfile(userId) {
@@ -50,7 +49,7 @@ export function AuthProvider({ children }) {
       if (error) throw error
       setProfile(data)
     } catch (err) {
-      console.error('fetchProfile error:', err)
+      console.error('fetchProfile:', err)
     } finally {
       setLoading(false)
     }
