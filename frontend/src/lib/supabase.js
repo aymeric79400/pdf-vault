@@ -7,38 +7,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('⚠️ Variables Supabase manquantes. Vérifiez votre fichier .env')
 }
 
-// Storage custom qui essaie localStorage puis sessionStorage
-const customStorage = {
-  getItem: (key) => {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      try { return sessionStorage.getItem(key) } catch { return null }
-    }
-  },
-  setItem: (key, value) => {
-    try {
-      localStorage.setItem(key, value)
-    } catch {
-      try { sessionStorage.setItem(key, value) } catch {}
-    }
-  },
-  removeItem: (key) => {
-    try {
-      localStorage.removeItem(key)
-    } catch {}
-    try { sessionStorage.removeItem(key) } catch {}
-  }
-}
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    storage: customStorage,
-    storageKey: 'planning-viewer-auth',
-    flowType: 'pkce'
   }
 })
 
