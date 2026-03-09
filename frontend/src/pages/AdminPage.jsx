@@ -324,6 +324,15 @@ export default function AdminPage() {
     if (user.id === currentProfile?.id) { toast.error('Vous ne pouvez pas supprimer votre propre compte'); return }
     if (!confirm(`Supprimer définitivement l'utilisateur "${user.email}" ?`)) return
     try {
+      const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+      // Supprimer de auth.users via Edge Function
+      await fetch(`${functionsUrl}/create-user`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` },
+        body: JSON.stringify({ user_id: user.id })
+      })
+      // Supprimer de profiles (cascade normalement, mais au cas où)
       await supabase.from('profiles').delete().eq('id', user.id)
       toast.success('Utilisateur supprimé')
       loadUsers()
