@@ -11,49 +11,52 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
-    // Timeout de sécurité absolu — 3s max
-    const safetyTimeout = setTimeout(() => {
-      if (mounted) setLoading(false)
-    }, 3000)
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return
-      clearTimeout(safetyTimeout)
-
-      if (event === 'SIGNED_OUT' || !session?.user) {
-        setUser(null); setProfile(null); setLoading(false)
-        return
+    // Race: getSession vs timeout 2s
+    const timer = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth timeout')
+        setLoading(false)
       }
+    }, 2000)
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return
+      clearTimeout(timer)
       if (session?.user) {
         setUser(session.user)
-        await fetchProfile(session.user.id)
-        if (event === 'SIGNED_IN') await logLogin(session.user.id)
+        try {
+          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          if (mounted && data) setProfile(data)
+        } catch {}
       }
+      if (mounted) setLoading(false)
+    }).catch(() => {
+      if (mounted) setLoading(false)
     })
 
-    // getSession déclenche onAuthStateChange
-    supabase.auth.getSession().catch(() => {
-      if (mounted) setLoading(false)
+    // Auth changes après init
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user)
+        try {
+          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          if (data) setProfile(data)
+        } catch {}
+        await logLogin(session.user.id)
+        setLoading(false)
+      }
+      if (event === 'SIGNED_OUT') {
+        setUser(null); setProfile(null); setLoading(false)
+      }
     })
 
     return () => {
       mounted = false
-      clearTimeout(safetyTimeout)
+      clearTimeout(timer)
       subscription.unsubscribe()
     }
   }, [])
-
-  async function fetchProfile(userId) {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
-      if (error) throw error
-      setProfile(data)
-    } catch (err) {
-      console.error('fetchProfile:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   async function logLogin(userId) {
     try {
@@ -76,7 +79,7 @@ export function AuthProvider({ children }) {
   const isAdmin = profile?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile: async () => {} }}>
       {children}
     </AuthContext.Provider>
   )
