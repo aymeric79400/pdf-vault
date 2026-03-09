@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [selectedFolder, setSelectedFolder] = useState(null)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [newDocStatus, setNewDocStatus] = useState({})
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -83,6 +84,78 @@ export default function DashboardPage() {
   return (
     <div className="dashboard">
       {/* Sidebar */}
+      {/* Overlay mobile menu */}
+      {showMobileMenu && (
+        <div className="mobile-overlay" onClick={() => setShowMobileMenu(false)} />
+      )}
+
+      {/* Panneau coulissant mobile */}
+      <div className={`mobile-drawer ${showMobileMenu ? 'open' : ''}`}>
+        <div className="mobile-drawer-header">
+          <div className="sidebar-logo" style={{padding:'16px',borderBottom:'none'}}>
+            <div className="logo-icon-sm">
+              <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                <rect x="3" y="6" width="26" height="23" rx="3" fill="rgba(212,168,67,0.12)" stroke="#d4a843" strokeWidth="1.5"/>
+                <line x1="3" y1="13" x2="29" y2="13" stroke="#d4a843" strokeWidth="1.5"/>
+                <line x1="10" y1="3" x2="10" y2="9" stroke="#d4a843" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="22" y1="3" x2="22" y2="9" stroke="#d4a843" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <span className="font-display sidebar-brand">Planning Viewer</span>
+          </div>
+          <button className="drawer-close" onClick={() => setShowMobileMenu(false)}>✕</button>
+        </div>
+
+        <nav className="sidebar-nav" style={{flex:1}}>
+          <div className="nav-section-label">Navigation</div>
+          <button className={`nav-item ${!selectedFolder ? 'active' : ''}`} onClick={() => { setSelectedFolder(null); setShowMobileMenu(false) }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            </svg>
+            Tous les documents
+            {documents.length > 0 && <span className="nav-badge">{documents.length}</span>}
+          </button>
+
+          <div className="nav-section-label" style={{marginTop:16}}>Années</div>
+          {folders.map(folder => (
+            <button key={folder.id} className={`nav-item ${selectedFolder === folder.id ? 'active' : ''}`}
+              onClick={() => { setSelectedFolder(folder.id); setShowMobileMenu(false) }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              {folder.name}
+              <span className="nav-badge">{documents.filter(d => d.folder_id === folder.id).length}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-bottom">
+          {isAdmin && (
+            <button className="nav-item admin-link" onClick={() => { navigate('/admin'); setShowMobileMenu(false) }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              Administration
+            </button>
+          )}
+          <div className="user-info">
+            <div className="user-avatar">{profile?.full_name?.[0] || profile?.email?.[0] || '?'}</div>
+            <div className="user-details">
+              <div className="user-name">{profile?.full_name || 'Utilisateur'}</div>
+              <div className="user-role">{isAdmin ? 'Administrateur' : 'Utilisateur'}</div>
+            </div>
+            <button className="btn-ghost icon-btn" onClick={signOut} title="Déconnexion">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="logo-icon-sm">
@@ -152,11 +225,100 @@ export default function DashboardPage() {
         </div>
       </aside>
 
+      {/* Drawer mobile */}
+      {showMobileMenu && (
+        <div className="mobile-overlay" onClick={() => setShowMobileMenu(false)}>
+          <div className="mobile-drawer" onClick={e => e.stopPropagation()}>
+            <div className="drawer-header">
+              <div className="sidebar-logo" style={{border:'none', padding:0}}>
+                <div className="logo-icon-sm">
+                  <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                    <rect x="3" y="6" width="26" height="23" rx="3" fill="rgba(212,168,67,0.12)" stroke="#d4a843" strokeWidth="1.5"/>
+                    <line x1="3" y1="13" x2="29" y2="13" stroke="#d4a843" strokeWidth="1.5"/>
+                    <line x1="10" y1="3" x2="10" y2="9" stroke="#d4a843" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="22" y1="3" x2="22" y2="9" stroke="#d4a843" strokeWidth="2" strokeLinecap="round"/>
+                    <rect x="8" y="17" width="4" height="3" rx="1" fill="#d4a843" opacity="0.8"/>
+                    <rect x="14" y="17" width="4" height="3" rx="1" fill="#d4a843" opacity="0.5"/>
+                    <rect x="20" y="17" width="4" height="3" rx="1" fill="#d4a843" opacity="0.3"/>
+                  </svg>
+                </div>
+                <span className="font-display sidebar-brand">Planning Viewer</span>
+              </div>
+              <button className="drawer-close" onClick={() => setShowMobileMenu(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <nav className="sidebar-nav">
+              <div className="nav-section-label">Navigation</div>
+              <button
+                className={`nav-item ${!selectedFolder ? 'active' : ''}`}
+                onClick={() => { setSelectedFolder(null); setShowMobileMenu(false) }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                </svg>
+                Tous les documents
+                <span className="nav-badge">{documents.length}</span>
+              </button>
+
+              <div className="nav-section-label" style={{marginTop: 16}}>Années</div>
+              {folders.map(folder => (
+                <button
+                  key={folder.id}
+                  className={`nav-item ${selectedFolder === folder.id ? 'active' : ''}`}
+                  onClick={() => { setSelectedFolder(folder.id); setShowMobileMenu(false) }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  {folder.name}
+                  <span className="nav-badge">{documents.filter(d => d.folder_id === folder.id).length}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="sidebar-bottom">
+              {isAdmin && (
+                <button className="nav-item admin-link" onClick={() => { navigate('/admin'); setShowMobileMenu(false) }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                  </svg>
+                  Administration
+                </button>
+              )}
+              <div className="user-info">
+                <div className="user-avatar">{profile?.full_name?.[0] || profile?.email?.[0] || '?'}</div>
+                <div className="user-details">
+                  <div className="user-name">{profile?.full_name || 'Utilisateur'}</div>
+                  <div className="user-role">{isAdmin ? 'Administrateur' : 'Utilisateur'}</div>
+                </div>
+                <button className="btn-ghost icon-btn" onClick={signOut} title="Déconnexion">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <main className="main-content">
         {/* Topbar */}
         <div className="topbar">
           <div className="topbar-left">
+            <button className="hamburger-btn" onClick={() => setShowMobileMenu(true)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
             <h2 className="font-display page-title">
               {selectedFolder ? folders.find(f => f.id === selectedFolder)?.name : 'Tous les documents'}
             </h2>
@@ -645,50 +807,66 @@ export default function DashboardPage() {
         }
         .empty-state h3 { font-size: 17px; color: var(--text-secondary); font-family: var(--font-display); }
         .empty-state p { font-size: 13px; }
+        .hamburger-btn {
+          display: none;
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          padding: 6px;
+          border-radius: var(--radius);
+          flex-shrink: 0;
+        }
+        .hamburger-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+        .mobile-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(2px);
+          z-index: 299;
+        }
+        .mobile-drawer {
+          display: none;
+          position: fixed;
+          top: 0; left: 0; bottom: 0;
+          width: 280px;
+          background: var(--bg-secondary);
+          border-right: 1px solid var(--border);
+          z-index: 300;
+          transform: translateX(-100%);
+          transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+          flex-direction: column;
+          overflow-y: auto;
+        }
+        .mobile-drawer.open { transform: translateX(0); }
+        .mobile-drawer-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid var(--border);
+          padding-right: 16px;
+        }
+        .drawer-close {
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+          font-size: 18px;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: var(--radius);
+          flex-shrink: 0;
+        }
+        .drawer-close:hover { color: var(--text-primary); background: var(--bg-elevated); }
         @media (max-width: 768px) {
-          .sidebar {
-            position: fixed;
-            top: auto;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            width: 100%;
-            min-height: auto;
-            height: auto;
-            flex-direction: column;
-            border-right: none;
-            border-top: 1px solid var(--border);
-            z-index: 200;
-            overflow-y: visible;
-          }
-          .sidebar-logo { display: none; }
-          .sidebar-nav {
-            display: flex;
-            flex-direction: row;
-            overflow-x: auto;
-            padding: 8px 12px;
-            gap: 6px;
-            scrollbar-width: none;
-          }
-          .sidebar-nav::-webkit-scrollbar { display: none; }
-          .nav-section-label { display: none; }
-          .nav-item {
-            white-space: nowrap;
-            flex-shrink: 0;
-            font-size: 12px;
-            padding: 7px 12px;
-            width: auto;
-          }
-          .sidebar-bottom {
-            display: none;
-          }
-          .main-content {
-            margin-left: 0;
-            padding-bottom: 80px;
-          }
+          .hamburger-btn { display: flex; }
+          .mobile-overlay { display: block; }
+          .mobile-drawer { display: flex; }
+          .sidebar { display: none; }
+          .main-content { margin-left: 0; padding-bottom: 24px; }
           .docs-grid { grid-template-columns: 1fr 1fr; padding: 12px; gap: 10px; }
           .topbar { padding: 12px 16px; }
-          .search-input { width: 140px; }
+          .search-input { width: 130px; }
         }
         @media (max-width: 400px) {
           .docs-grid { grid-template-columns: 1fr; }
