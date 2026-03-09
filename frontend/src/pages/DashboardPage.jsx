@@ -646,14 +646,52 @@ export default function DashboardPage() {
         .empty-state h3 { font-size: 17px; color: var(--text-secondary); font-family: var(--font-display); }
         .empty-state p { font-size: 13px; }
         @media (max-width: 768px) {
-          .sidebar { 
-            transform: translateX(-100%);
-            transition: transform var(--transition);
+          .sidebar {
+            position: fixed;
+            top: auto;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            min-height: auto;
+            height: auto;
+            flex-direction: column;
+            border-right: none;
+            border-top: 1px solid var(--border);
+            z-index: 200;
+            overflow-y: visible;
           }
-          .main-content { margin-left: 0; }
-          .docs-grid { grid-template-columns: 1fr; padding: 16px; }
-          .topbar { padding: 16px; }
-          .search-input { width: 120px; }
+          .sidebar-logo { display: none; }
+          .sidebar-nav {
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            padding: 8px 12px;
+            gap: 6px;
+            scrollbar-width: none;
+          }
+          .sidebar-nav::-webkit-scrollbar { display: none; }
+          .nav-section-label { display: none; }
+          .nav-item {
+            white-space: nowrap;
+            flex-shrink: 0;
+            font-size: 12px;
+            padding: 7px 12px;
+            width: auto;
+          }
+          .sidebar-bottom {
+            display: none;
+          }
+          .main-content {
+            margin-left: 0;
+            padding-bottom: 80px;
+          }
+          .docs-grid { grid-template-columns: 1fr 1fr; padding: 12px; gap: 10px; }
+          .topbar { padding: 12px 16px; }
+          .search-input { width: 140px; }
+        }
+        @media (max-width: 400px) {
+          .docs-grid { grid-template-columns: 1fr; }
         }
         .app-footer { position:fixed; bottom:12px; right:16px; z-index:50; pointer-events:none; }
         .footer-logo-img { height:32px; width:auto; opacity:0.35; transition:opacity 0.2s; pointer-events:all; }
