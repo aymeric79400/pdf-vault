@@ -11,49 +11,46 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
-    // Timeout de sécurité — jamais bloqué plus de 5s
-    const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth timeout — forcing loading false')
-        setLoading(false)
+    async function init() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+        if (session?.user) {
+          setUser(session.user)
+          await fetchProfile(session.user.id)
+        } else {
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error('Init error:', err)
+        if (mounted) setLoading(false)
       }
-    }, 5000)
+    }
+
+    init()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
-      console.log('Auth event:', event, session?.user?.email)
-
-      if (!session?.user) {
-        setUser(null); setProfile(null); setLoading(false)
-        return
-      }
-
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user)
         await fetchProfile(session.user.id)
-        if (event === 'SIGNED_IN') await logLogin(session.user.id)
+        await logLogin(session.user.id)
+      }
+      if (event === 'SIGNED_OUT') {
+        setUser(null); setProfile(null); setLoading(false)
       }
     })
 
-    return () => {
-      mounted = false
-      clearTimeout(timeout)
-      subscription.unsubscribe()
-    }
+    return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
   async function fetchProfile(userId) {
     try {
-      const { data, error } = await supabase
-        .from('profiles').select('*').eq('id', userId).single()
-      if (error) {
-        console.error('fetchProfile error:', error.code, error.message)
-        // Continuer même sans profil — l'user est connecté
-      } else {
-        setProfile(data)
-      }
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (error) throw error
+      setProfile(data)
     } catch (err) {
-      console.error('fetchProfile catch:', err)
+      console.error('fetchProfile error:', err)
     } finally {
       setLoading(false)
     }
@@ -62,10 +59,7 @@ export function AuthProvider({ children }) {
   async function logLogin(userId) {
     try {
       const { deviceType, deviceInfo } = getDeviceInfo()
-      await supabase.from('login_history').insert({
-        user_id: userId, device_type: deviceType,
-        device_info: deviceInfo, ip_address: 'N/A', success: true
-      })
+      await supabase.from('login_history').insert({ user_id: userId, device_type: deviceType, device_info: deviceInfo, ip_address: 'N/A', success: true })
     } catch {}
   }
 
