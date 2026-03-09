@@ -33,16 +33,27 @@ function AppRoutes() {
     return () => clearTimeout(t)
   }, [])
 
+  // Encore en chargement et pas timeout → spinner
   if (loading && !timedOut) return <LoadingScreen />
 
+  // Pas d'user (timeout ou pas de session) → login
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
+    )
+  }
+
+  // User connecté → routes normales
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route path="/dashboard" element={user ? <DashboardPage /> : <Navigate to="/login" replace />} />
-      <Route path="/viewer/:docId" element={user ? <ViewerPage /> : <Navigate to="/login" replace />} />
-      <Route path="/admin" element={user ? <AdminPage /> : <Navigate to="/login" replace />} />
-      <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/viewer/:docId" element={<ViewerPage />} />
+      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }
