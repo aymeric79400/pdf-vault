@@ -7,51 +7,53 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [debugMsg, setDebugMsg] = useState('init...')
 
   useEffect(() => {
     let mounted = true
 
-    // Log ce qui est dans le localStorage
-    const keys = Object.keys(localStorage)
-    const supaKeys = keys.filter(k => k.includes('supabase') || k.includes('planning'))
-    setDebugMsg('LS keys: ' + (supaKeys.join(', ') || 'AUCUNE'))
-
-    setTimeout(async () => {
-      if (!mounted) return
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession()
-        setDebugMsg(`sess:${session?.user?.email ?? 'null'} err:${error?.message ?? 'ok'}`)
-        if (!session?.user) { setLoading(false); return }
-        setUser(session.user)
-        await fetchProfile(session.user.id)
-      } catch(e) {
-        setDebugMsg('ERR: ' + e.message)
+    // Timeout de sécurité — jamais bloqué plus de 5s
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth timeout — forcing loading false')
         setLoading(false)
       }
-    }, 100)
+    }, 5000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
-      setDebugMsg('event:' + event + ' u:' + (session?.user?.email ?? 'null'))
-      if (event === 'SIGNED_OUT') { setUser(null); setProfile(null); setLoading(false) }
-      if (event === 'SIGNED_IN' && session?.user) {
+      console.log('Auth event:', event, session?.user?.email)
+
+      if (!session?.user) {
+        setUser(null); setProfile(null); setLoading(false)
+        return
+      }
+
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         setUser(session.user)
         await fetchProfile(session.user.id)
-        await logLogin(session.user.id)
+        if (event === 'SIGNED_IN') await logLogin(session.user.id)
       }
     })
 
-    return () => { mounted = false; subscription.unsubscribe() }
+    return () => {
+      mounted = false
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function fetchProfile(userId) {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
-      if (error) throw error
-      setProfile(data)
+      const { data, error } = await supabase
+        .from('profiles').select('*').eq('id', userId).single()
+      if (error) {
+        console.error('fetchProfile error:', error.code, error.message)
+        // Continuer même sans profil — l'user est connecté
+      } else {
+        setProfile(data)
+      }
     } catch (err) {
-      setDebugMsg('profile ERR: ' + err.message)
+      console.error('fetchProfile catch:', err)
     } finally {
       setLoading(false)
     }
@@ -60,7 +62,10 @@ export function AuthProvider({ children }) {
   async function logLogin(userId) {
     try {
       const { deviceType, deviceInfo } = getDeviceInfo()
-      await supabase.from('login_history').insert({ user_id: userId, device_type: deviceType, device_info: deviceInfo, ip_address: 'N/A', success: true })
+      await supabase.from('login_history').insert({
+        user_id: userId, device_type: deviceType,
+        device_info: deviceInfo, ip_address: 'N/A', success: true
+      })
     } catch {}
   }
 
@@ -79,9 +84,6 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile }}>
-      <div style={{position:'fixed',bottom:50,left:4,right:4,background:'rgba(0,0,0,0.9)',color:'#0f0',fontSize:10,padding:'4px 8px',borderRadius:6,zIndex:9999,wordBreak:'break-all',pointerEvents:'none'}}>
-        🔍 {debugMsg} | u:{user?'✓':'✗'} p:{profile?'✓':'✗'} l:{loading?'⏳':'✓'}
-      </div>
       {children}
     </AuthContext.Provider>
   )
