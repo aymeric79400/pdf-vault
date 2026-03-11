@@ -56,6 +56,23 @@ export default function AdminPage() {
   const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear() })
   const [userForm, setUserForm] = useState(EMPTY_USER)
   const [editUserForm, setEditUserForm] = useState({})
+
+
+  // Formate le téléphone : 10 chiffres max, espace tous les 2 (06 12 34 56 78)
+  function formatPhone(str) {
+    const digits = str.replace(/\D/g, '').slice(0, 10)
+    return digits.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+  }
+
+  // Formate "nom prénom" → "Nom Prénom" (chaque mot capitalisé, tirets gérés)
+  function formatFullName(str) {
+    if (!str) return str
+    return str
+      .split(' ')
+      .map(word => word.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join('-'))
+      .join(' ')
+  }
+
   const [newPassword, setNewPassword] = useState('')
   const [uploading, setUploading] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
@@ -745,7 +762,7 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Nom complet</label>
-                  <input className="input" placeholder="Jean Dupont" value={userForm.full_name} onChange={e => setUserForm(p=>({...p,full_name:e.target.value}))} />
+                  <input className="input" placeholder="Dupont Jean" value={userForm.full_name} onChange={e => setUserForm(p=>({...p,full_name:formatFullName(e.target.value)}))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email *</label>
@@ -753,7 +770,7 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
-                  <input className="input" type="tel" placeholder="+33 6 00 00 00 00" value={userForm.phone} onChange={e => setUserForm(p=>({...p,phone:e.target.value}))} />
+                  <input className="input" type="tel" placeholder="06 12 34 56 78" value={userForm.phone} onChange={e => setUserForm(p=>({...p,phone:formatPhone(e.target.value)}))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Mot de passe * (min. 8 caractères)</label>
@@ -801,7 +818,7 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Nom complet</label>
-                  <input className="input" placeholder="Nom Prénom" value={editUserForm.full_name} onChange={e => setEditUserForm(p=>({...p,full_name:e.target.value}))} />
+                  <input className="input" placeholder="Dupont Jean" value={editUserForm.full_name} onChange={e => setEditUserForm(p=>({...p,full_name:formatFullName(e.target.value)}))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email</label>
@@ -812,7 +829,7 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
-                  <input className="input" type="tel" placeholder="+33 6 00 00 00 00" value={editUserForm.phone} onChange={e => setEditUserForm(p=>({...p,phone:e.target.value}))} />
+                  <input className="input" type="tel" placeholder="06 12 34 56 78" value={editUserForm.phone} onChange={e => setEditUserForm(p=>({...p,phone:formatPhone(e.target.value)}))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Rôle</label>
