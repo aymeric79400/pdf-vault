@@ -221,7 +221,7 @@ const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents,
     </nav>
     <div className="sidebar-bottom">
       <div className="user-info">
-        <div className="user-avatar">{profile?.full_name ? profile.full_name.trim().split(/\s+/).filter(n => n.length > 0).slice(0,2).map(n => n[0].toUpperCase()).join('') : '?'}</div>
+        <div className="user-avatar">{profile?.full_name ? profile.full_name.trim().split(/\s+/).filter(n => n.length > 0).slice(0,2).map(n => n[0].toUpperCase()).join('').slice(0,2) : '?'}</div>
         <div className="user-details">
           <div className="user-name">{profile?.full_name || profile?.email || 'Utilisateur'}</div>
           <div className="user-role">{isAdmin ? 'Administrateur' : 'Utilisateur'}</div>
