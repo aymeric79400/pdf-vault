@@ -437,7 +437,6 @@ export default function AdminPage() {
         })))
       }
       toast.success('Document publié !')
-      const folder = folders.find(f => f.id === docForm.folder_id)
       await sendDocumentEmail('new_document', {
         title: docForm.title,
         description: docForm.description || '',
@@ -454,8 +453,8 @@ export default function AdminPage() {
     setUploading(true)
     try {
       let filePath = editDoc.file_path
+      const folder = folders.find(f => f.id === (docForm.folder_id || editDoc.folder_id))
       if (docForm.file) {
-        const folder = folders.find(f => f.id === (docForm.folder_id || editDoc.folder_id))
         const fileName = `${Date.now()}_${docForm.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
         filePath = `${folder ? folder.year : 'divers'}/${fileName}`
         await supabase.storage.from('pdfs').upload(filePath, docForm.file, { contentType: 'application/pdf' })
@@ -476,7 +475,6 @@ export default function AdminPage() {
       }
       toast.success('Document mis à jour')
       if (docForm.file) {
-        const folder = folders.find(f => f.id === (docForm.folder_id || editDoc.folder_id))
         await sendDocumentEmail('updated_document', {
           title: docForm.title || editDoc.title,
           description: docForm.description || editDoc.description || '',
