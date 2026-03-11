@@ -394,6 +394,26 @@ export default function AdminPage() {
   }
 
   // ── DOCUMENTS ──
+
+  // Envoie un email de notification via l'Edge Function
+  async function sendDocumentEmail(type, document) {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      const supabaseFunctionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${supabaseUrl}/functions/v1`
+      const { data: { session } } = await supabase.auth.getSession()
+      await fetch(`${supabaseFunctionsUrl}/send-notification-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ type, document }),
+      })
+    } catch (err) {
+      console.warn('Email notification failed (non-blocking):', err)
+    }
+  }
+
   async function uploadDocument() {
     if (!docForm.file || !docForm.title) { toast.error('Titre et fichier PDF requis'); return }
     setUploading(true)
@@ -417,6 +437,12 @@ export default function AdminPage() {
         })))
       }
       toast.success('Document publié !')
+      const folder = folders.find(f => f.id === docForm.folder_id)
+      await sendDocumentEmail('new_document', {
+        title: docForm.title,
+        description: docForm.description || '',
+        folder_name: folder?.name || '',
+      })
       setUploadModal(false); setDocForm({ title: '', description: '', folder_id: '', file: null })
       loadAll()
     } catch (err) { toast.error('Erreur: ' + err.message) }
@@ -449,6 +475,14 @@ export default function AdminPage() {
         })))
       }
       toast.success('Document mis à jour')
+      if (docForm.file) {
+        const folder = folders.find(f => f.id === (docForm.folder_id || editDoc.folder_id))
+        await sendDocumentEmail('updated_document', {
+          title: docForm.title || editDoc.title,
+          description: docForm.description || editDoc.description || '',
+          folder_name: folder?.name || '',
+        })
+      }
       setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null })
       setUploadModal(false); loadAll()
     } catch (err) { toast.error('Erreur: ' + err.message) }
