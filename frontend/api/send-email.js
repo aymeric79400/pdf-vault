@@ -23,7 +23,7 @@ function buildEmailHtml(type, document, recipientName) {
   const intro = isNew
     ? 'Un nouveau document a été publié et est disponible dans votre espace :'
     : 'Un document a été mis à jour et est disponible dans votre espace :'
-  const emoji = isNew ? '📄' : '🔄'
+  const emoji = isNew ? '&#x1F4C4;' : '&#x1F504;'
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -84,14 +84,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    console.log('=== send-email called ===')
-    console.log('SMTP_USER:', process.env.SMTP_USER ? 'OK' : 'MISSING')
-    console.log('SMTP_PASSWORD:', process.env.SMTP_PASSWORD ? 'OK' : 'MISSING')
-    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'OK' : 'MISSING')
-    console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING')
+
+
+
+
 
     const { type, document } = req.body
-    console.log('type:', type, '| document:', document?.title)
     if (!type || !document) return res.status(400).json({ error: 'Missing type or document' })
 
     const supabase = createClient(
@@ -104,32 +102,27 @@ export default async function handler(req, res) {
       .eq('is_active', true)
       .not('email', 'is', null)
       .neq('email', '')
-
-    console.log('users found:', users?.length, '| error:', error?.message)
     if (error || !users?.length) {
       return res.status(400).json({ error: 'No recipients', detail: error })
     }
 
     const subject = type === 'new_document'
-      ? `📄 Nouveau document : ${document.title}`
-      : `🔄 Document mis à jour : ${document.title}`
+      ? `[Planning Viewer] Nouveau document : ${document.title}`
+      : `[Planning Viewer] Document mis a jour : ${document.title}`
 
     const results = []
     for (const user of users) {
       const firstName = user.full_name?.trim().split(/\s+/).pop() || null
       const html = buildEmailHtml(type, document, firstName)
       try {
-        console.log('Sending to:', user.email)
         await transporter.sendMail({
           from: `Planning Viewer <${process.env.SMTP_USER}>`,
           to: user.email,
           subject,
           html,
         })
-        console.log('Sent OK:', user.email)
         results.push({ email: user.email, status: 'sent' })
       } catch (err) {
-        console.error('Send failed:', user.email, err.message)
         results.push({ email: user.email, status: 'failed', error: err.message })
       }
     }
@@ -141,7 +134,6 @@ export default async function handler(req, res) {
     })
 
   } catch (err) {
-    console.error('Handler error:', err.message)
     return res.status(500).json({ error: err.message })
   }
 }
