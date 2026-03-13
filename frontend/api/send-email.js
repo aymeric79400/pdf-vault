@@ -119,6 +119,7 @@ export default async function handler(req, res) {
           from: `Planning Viewer <${process.env.SMTP_USER}>`,
           to: user.email,
           subject,
+          text: `Bonjour ${firstName || ''},\n\nUn nouveau document est disponible : ${document.title}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`,
           html,
         })
         results.push({ email: user.email, status: 'sent' })
