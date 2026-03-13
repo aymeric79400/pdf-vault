@@ -78,7 +78,6 @@ function buildEmailHtml(type, document, recipientName) {
 }
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -86,10 +85,16 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
+    console.log('=== send-email called ===')
+    console.log('SMTP_USER:', process.env.SMTP_USER ? 'OK' : 'MISSING')
+    console.log('SMTP_PASSWORD:', process.env.SMTP_PASSWORD ? 'OK' : 'MISSING')
+    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'OK' : 'MISSING')
+    console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING')
+
     const { type, document } = req.body
+    console.log('type:', type, '| document:', document?.title)
     if (!type || !document) return res.status(400).json({ error: 'Missing type or document' })
 
-    // Récupérer tous les utilisateurs actifs avec un email
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -101,6 +106,7 @@ export default async function handler(req, res) {
       .not('email', 'is', null)
       .neq('email', '')
 
+    console.log('users found:', users?.length, '| error:', error?.message)
     if (error || !users?.length) {
       return res.status(400).json({ error: 'No recipients', detail: error })
     }
@@ -114,14 +120,17 @@ export default async function handler(req, res) {
       const firstName = user.full_name?.trim().split(/\s+/).pop() || null
       const html = buildEmailHtml(type, document, firstName)
       try {
+        console.log('Sending to:', user.email)
         await transporter.sendMail({
           from: `Planning Viewer <${process.env.SMTP_USER}>`,
           to: user.email,
           subject,
           html,
         })
+        console.log('Sent OK:', user.email)
         results.push({ email: user.email, status: 'sent' })
       } catch (err) {
+        console.error('Send failed:', user.email, err.message)
         results.push({ email: user.email, status: 'failed', error: err.message })
       }
     }
@@ -133,6 +142,7 @@ export default async function handler(req, res) {
     })
 
   } catch (err) {
+    console.error('Handler error:', err.message)
     return res.status(500).json({ error: err.message })
   }
 }
