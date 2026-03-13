@@ -5,14 +5,13 @@ import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp-mail.outlook.com',
-  port: 587,
-  secure: false,
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
   },
-  tls: { ciphers: 'SSLv3' },
 })
 
 const APP_URL = process.env.APP_URL || 'https://pdf-vault-chi.vercel.app'
