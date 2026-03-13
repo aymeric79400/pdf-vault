@@ -47,8 +47,8 @@ function buildEmailHtml(type, document, recipientName) {
                 </td>
               </tr>
             </table>
-            <p style="margin:24px 0 0;">
-              <a href="${APP_URL}/dashboard" style="background:#c8261c;color:#ffffff;padding:11px 24px;text-decoration:none;border-radius:6px;font-size:14px;font-weight:bold;">Consulter le document</a>
+            <p style="margin:24px 0 0;font-size:14px;color:#333333;">
+              Consultez le document ici : <a href="${APP_URL}/dashboard" style="color:#2c5c26;">${APP_URL}/dashboard</a>
             </p>
           </td>
         </tr>
