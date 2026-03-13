@@ -19,54 +19,42 @@ const APP_URL = process.env.APP_URL || 'https://pdf-vault-chi.vercel.app'
 function buildEmailHtml(type, document, recipientName) {
   const isNew = type === 'new_document'
   const greeting = recipientName ? `Bonjour ${recipientName},` : 'Bonjour,'
-  const actionLabel = isNew ? 'Nouveau document disponible' : 'Document mis à jour'
-  const intro = isNew
-    ? 'Un nouveau document a été publié et est disponible dans votre espace :'
-    : 'Un document a été mis à jour et est disponible dans votre espace :'
-  const emoji = isNew ? '&#x1F4C4;' : '&#x1F504;'
+  const action = isNew ? 'Un nouveau document est disponible' : 'Un document a été mis à jour'
 
   return `<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f0ebe0;font-family:'Helvetica Neue',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0ebe0;padding:40px 16px;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:30px 16px;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+      <table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;background:#ffffff;border:1px solid #dddddd;border-radius:8px;">
         <tr>
-          <td style="background:linear-gradient(135deg,#3d7a35,#2c5c26);padding:28px 32px;border-radius:18px 18px 0 0;">
-            <table width="100%" cellpadding="0" cellspacing="0"><tr>
-              <td>
-                <div style="font-size:20px;font-weight:700;color:white;">Planning Viewer</div>
-                <div style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:0.1em;margin-top:3px;">SOIGNON · EURIAL · AGRIAL</div>
-              </td>
-              <td align="right"><div style="font-size:22px;">${emoji}</div></td>
-            </tr></table>
-            <div style="height:3px;background:linear-gradient(90deg,#c8261c,#e03020 55%,#d4a84b);border-radius:2px;margin-top:20px;"></div>
+          <td style="background:#2c5c26;padding:20px 28px;border-radius:8px 8px 0 0;">
+            <span style="font-size:18px;font-weight:bold;color:#ffffff;">Planning Viewer</span>
+            <span style="font-size:10px;color:#aaaaaa;margin-left:10px;">SOIGNON · EURIAL · AGRIAL</span>
           </td>
         </tr>
         <tr>
-          <td style="background:#ffffff;padding:36px 32px;">
-            <p style="margin:0 0 6px;font-size:15px;color:#4a5e44;">${greeting}</p>
-            <h2 style="margin:0 0 20px;font-size:22px;color:#1e2a1a;font-weight:700;">${actionLabel}</h2>
-            <p style="margin:0 0 20px;font-size:14px;color:#7a9070;line-height:1.6;">${intro}</p>
-            <div style="background:#faf6ef;border:1.5px solid rgba(61,122,53,0.15);border-radius:12px;padding:20px 24px;margin-bottom:28px;">
-              <div style="font-size:16px;font-weight:700;color:#1e2a1a;margin-bottom:6px;">${document.title}</div>
-              ${document.description ? `<div style="font-size:13px;color:#7a9070;line-height:1.5;">${document.description}</div>` : ''}
-              ${document.folder_name ? `<div style="display:inline-block;margin-top:10px;background:#e8f2e6;color:#2c5c26;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;">${document.folder_name}</div>` : ''}
-            </div>
-            <table cellpadding="0" cellspacing="0"><tr>
-              <td style="background:#c8261c;border-radius:10px;box-shadow:0 4px 14px rgba(200,38,28,0.3);">
-                <a href="${APP_URL}/dashboard" style="display:inline-block;padding:13px 28px;color:white;text-decoration:none;font-size:14px;font-weight:700;">Consulter le document →</a>
-              </td>
-            </tr></table>
-          </td>
-        </tr>
-        <tr>
-          <td style="background:#f5f0e6;padding:20px 32px;border-radius:0 0 18px 18px;border-top:1px solid rgba(61,122,53,0.1);">
-            <p style="margin:0;font-size:11px;color:#a8b8a0;line-height:1.6;">
-              Vous recevez cet email car vous avez un compte sur Planning Viewer.<br>
-              Accès réservé — Ne pas transférer ce message.
+          <td style="padding:28px;">
+            <p style="margin:0 0 8px;font-size:14px;color:#333333;">${greeting}</p>
+            <p style="margin:0 0 20px;font-size:14px;color:#333333;">${action} :</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#f9f9f9;border:1px solid #dddddd;border-radius:6px;padding:16px;">
+                  <p style="margin:0 0 6px;font-size:15px;font-weight:bold;color:#1e2a1a;">${document.title}</p>
+                  ${document.description ? `<p style="margin:0 0 8px;font-size:13px;color:#666666;">${document.description}</p>` : ''}
+                  ${document.folder_name ? `<p style="margin:0;font-size:12px;color:#3d7a35;font-weight:bold;">${document.folder_name}</p>` : ''}
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;">
+              <a href="${APP_URL}/dashboard" style="background:#c8261c;color:#ffffff;padding:11px 24px;text-decoration:none;border-radius:6px;font-size:14px;font-weight:bold;">Consulter le document</a>
             </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;border-top:1px solid #eeeeee;">
+            <p style="margin:0;font-size:11px;color:#999999;">Vous recevez cet email car vous avez un compte sur Planning Viewer. Acces reserve.</p>
           </td>
         </tr>
       </table>
@@ -115,11 +103,13 @@ export default async function handler(req, res) {
       const firstName = user.full_name?.trim().split(/\s+/).pop() || null
       const html = buildEmailHtml(type, document, firstName)
       try {
+        const html = buildEmailHtml(type, document, firstName)
         await transporter.sendMail({
           from: `Planning Viewer <${process.env.SMTP_USER}>`,
           to: user.email,
           subject,
           text: `Bonjour ${firstName || ''},\n\nUn nouveau document est disponible : ${document.title}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`,
+          html,
         })
         results.push({ email: user.email, status: 'sent' })
       } catch (err) {
