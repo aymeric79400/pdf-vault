@@ -1,11 +1,13 @@
 // Service Worker — Planning Viewer
-// Gère les notifications push en arrière-plan
+import { precacheAndRoute } from 'workbox-precaching'
 
+// Précache Vite (requis par injectManifest)
+precacheAndRoute(self.__WB_MANIFEST || [])
+
+// Notifications push
 self.addEventListener('push', (event) => {
   if (!event.data) return
-
   const data = event.data.json()
-
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
