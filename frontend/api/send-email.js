@@ -103,13 +103,14 @@ export default async function handler(req, res) {
       const firstName = user.full_name?.trim().split(/\s+/).pop() || null
       const html = buildEmailHtml(type, document, firstName)
       try {
-        const html = buildEmailHtml(type, document, firstName)
+        const textContent = type === 'new_document'
+          ? `Bonjour ${firstName || ''},\n\nUn nouveau document est disponible : ${document.title}${document.folder_name ? ' (' + document.folder_name + ')' : ''}${document.description ? '\n' + document.description : ''}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`
+          : `Bonjour ${firstName || ''},\n\nLe document suivant a ete mis a jour : ${document.title}${document.folder_name ? ' (' + document.folder_name + ')' : ''}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`
         await transporter.sendMail({
           from: `Planning Viewer <${process.env.SMTP_USER}>`,
           to: user.email,
           subject,
-          text: `Bonjour ${firstName || ''},\n\nUn nouveau document est disponible : ${document.title}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`,
-          html,
+          text: textContent,
         })
         results.push({ email: user.email, status: 'sent' })
       } catch (err) {
