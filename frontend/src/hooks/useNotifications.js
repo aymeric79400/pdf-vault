@@ -106,7 +106,7 @@ export function useNotifications() {
           endpoint: subJson.endpoint,
           p256dh: subJson.keys.p256dh,
           auth: subJson.keys.auth
-        })
+        }, { onConflict: 'endpoint' })
         return true
       }
 
@@ -122,7 +122,7 @@ export function useNotifications() {
         endpoint: subJson.endpoint,
         p256dh: subJson.keys.p256dh,
         auth: subJson.keys.auth
-      })
+      }, { onConflict: 'endpoint' })
       return true
     } catch (err) {
       console.error('Erreur push subscription:', err)
