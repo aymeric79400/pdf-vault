@@ -85,6 +85,10 @@ export function useNotifications() {
   }
 
   async function subscribePush() {
+    console.log('subscribePush called')
+    console.log('serviceWorker:', 'serviceWorker' in navigator)
+    console.log('PushManager:', 'PushManager' in window)
+    console.log('VAPID KEY:', import.meta.env.VITE_VAPID_PUBLIC_KEY ? 'OK' : 'MISSING')
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
     if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return false
 
