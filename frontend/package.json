@@ -21,7 +21,8 @@
     "react-hot-toast": "^2.4.1",
     "lucide-react": "^0.344.0",
     "ua-parser-js": "^1.0.37",
-    "nodemailer": "^6.9.9"
+    "nodemailer": "^6.9.9",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.64",
