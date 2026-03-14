@@ -408,6 +408,18 @@ export default function AdminPage() {
     }
   }
 
+  async function sendPushNotification(type, document) {
+    try {
+      await fetch('/api/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, document }),
+      })
+    } catch (err) {
+      console.warn('Push notification failed (non-blocking):', err)
+    }
+  }
+
   async function uploadDocument() {
     if (!docForm.file || !docForm.title) { toast.error('Titre et fichier PDF requis'); return }
     setUploading(true)
@@ -434,6 +446,10 @@ export default function AdminPage() {
       await sendDocumentEmail('new_document', {
         title: docForm.title,
         description: docForm.description || '',
+        folder_name: folder?.name || '',
+      })
+      await sendPushNotification('new_document', {
+        title: docForm.title,
         folder_name: folder?.name || '',
       })
       setUploadModal(false); setDocForm({ title: '', description: '', folder_id: '', file: null })
@@ -472,6 +488,10 @@ export default function AdminPage() {
         await sendDocumentEmail('updated_document', {
           title: docForm.title || editDoc.title,
           description: docForm.description || editDoc.description || '',
+          folder_name: folder?.name || '',
+        })
+        await sendPushNotification('updated_document', {
+          title: docForm.title || editDoc.title,
           folder_name: folder?.name || '',
         })
       }
