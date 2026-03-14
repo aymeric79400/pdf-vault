@@ -104,8 +104,8 @@ export default async function handler(req, res) {
       const html = buildEmailHtml(type, document, firstName)
       try {
         const textContent = type === 'new_document'
-          ? `Bonjour ${firstName || ''},\n\nUn nouveau document est disponible : ${document.title}${document.folder_name ? ' (' + document.folder_name + ')' : ''}${document.description ? '\n' + document.description : ''}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`
-          : `Bonjour ${firstName || ''},\n\nLe document suivant a ete mis a jour : ${document.title}${document.folder_name ? ' (' + document.folder_name + ')' : ''}\n\nConsultez-le ici : ${APP_URL}/dashboard\n\nPlanning Viewer`
+          ? `Bonjour ${firstName || ''},\n\n${document.title}${document.folder_name ? ' - ' + document.folder_name : ''} est disponible sur ${APP_URL}/dashboard`
+          : `Bonjour ${firstName || ''},\n\n${document.title}${document.folder_name ? ' - ' + document.folder_name : ''} a ete mis a jour sur ${APP_URL}/dashboard`
         const msgId = `<planning-viewer-${Date.now()}-${Math.random().toString(36).slice(2)}@gmail.com>`
         await transporter.sendMail({
           from: `Planning Viewer <${process.env.SMTP_USER}>`,
