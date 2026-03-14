@@ -420,6 +420,50 @@ export default function AdminPage() {
     }
   }
 
+  async function testEmailUser(user) {
+    if (!user.email) { toast.error('Cet utilisateur n\'a pas d\'email renseigné'); return }
+    const lastDoc = documents.filter(d => d.is_active).sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0]
+    if (!lastDoc) { toast.error('Aucun document disponible pour le test'); return }
+    const folder = folders.find(f => f.id === lastDoc.folder_id)
+    try {
+      const res = await fetch('/api/send-email-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: user.email,
+          full_name: user.full_name || '',
+          type: 'new_document',
+          document: { title: lastDoc.title, description: lastDoc.description || '', folder_name: folder?.name || '' }
+        })
+      })
+      if (res.ok) toast.success(`Email de test envoyé à ${user.email}`)
+      else toast.error('Erreur lors de l\'envoi')
+    } catch { toast.error('Erreur lors de l\'envoi') }
+  }
+
+  async function testPushUser(user) {
+    const lastDoc = documents.filter(d => d.is_active).sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0]
+    if (!lastDoc) { toast.error('Aucun document disponible pour le test'); return }
+    const folder = folders.find(f => f.id === lastDoc.folder_id)
+    try {
+      const res = await fetch('/api/send-push-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          type: 'new_document',
+          document: { title: lastDoc.title, folder_name: folder?.name || '' }
+        })
+      })
+      const data = await res.json()
+      if (res.ok && data.sent > 0) toast.success(`Notification push envoyée à ${user.full_name || user.username}`)
+      else if (data.sent === 0) toast.error('Aucun appareil enregistré pour cet utilisateur')
+      else toast.error('Erreur lors de l\'envoi')
+    } catch { toast.error('Erreur lors de l\'envoi') }
+  }
+
+
+
   async function uploadDocument() {
     if (!docForm.file || !docForm.title) { toast.error('Titre et fichier PDF requis'); return }
     setUploading(true)
@@ -700,6 +744,8 @@ export default function AdminPage() {
                         <button className="btn btn-ghost" onClick={() => { setSelectedUser(u); setNewPassword(''); setPasswordModal(true) }}>
                           🔑 MDP
                         </button>
+                        <button className="btn btn-test-email" title="Tester l'envoi d'email" onClick={() => testEmailUser(u)}>✉️ Test mail</button>
+                        <button className="btn btn-test-push" title="Tester la notification push" onClick={() => testPushUser(u)}>🔔 Test push</button>
                         <button className="btn btn-danger" onClick={() => deleteUser(u)}>Supprimer</button>
                       </td>
                     </tr>
