@@ -85,13 +85,31 @@ export function useNotifications() {
   }
 
   async function subscribePush() {
-    if (!('serviceWorker' in navigator)) return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
+    if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return false
 
     try {
-      const reg = await navigator.serviceWorker.ready
+      // Enregistrer notre Service Worker
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+
+      // Vérifier si déjà abonné
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) {
+        const subJson = existing.toJSON()
+        await supabase.from('push_subscriptions').upsert({
+          user_id: user.id,
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth
+        })
+        return true
+      }
+
+      // Nouvelle souscription
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: import.meta.env.VITE_VAPID_PUBLIC_KEY
+        applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY)
       })
 
       const subJson = sub.toJSON()
@@ -106,6 +124,15 @@ export function useNotifications() {
       console.error('Erreur push subscription:', err)
       return false
     }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4)
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+    const rawData = window.atob(base64)
+    const outputArray = new Uint8Array(rawData.length)
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
+    return outputArray
   }
 
   return {
