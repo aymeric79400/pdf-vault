@@ -205,7 +205,7 @@ const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents,
         <button key={folder.id} className={`nav-item ${selectedFolder === folder.id ? 'active' : ''}`} onClick={() => { setSelectedFolder(folder.id); onClose?.() }}>
           {selectedFolder === folder.id && <span className="nav-active-dot"/>}
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          {folder.name}
+          <span>{folder.name}{folder.service_id && folder.services?.name ? <span style={{fontSize:9,opacity:0.5,display:'block',lineHeight:1}}>{folder.services.name}</span> : null}</span>
           <span className="nav-badge">{documents.filter(d => d.folder_id === folder.id).length}</span>
         </button>
       ))}
@@ -247,6 +247,7 @@ export default function DashboardPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [newDocStatus, setNewDocStatus] = useState({})
   const [searchQuery, setSearchQuery] = useState('')
+  const [userServiceIds, setUserServiceIds] = useState(null) // null = admin (tout voir)
 
   useEffect(() => {
     loadData()
@@ -257,11 +258,40 @@ export default function DashboardPage() {
   async function loadData() {
     try {
       const [foldersRes, docsRes] = await Promise.all([
-        supabase.from('folders').select('*').eq('is_active', true).order('year', { ascending: false }),
-        supabase.from('documents').select('*, folders(name, year, is_active)').eq('is_active', true).order('published_at', { ascending: false })
+        supabase.from('folders').select('*, services(id, is_active)').eq('is_active', true).order('year', { ascending: false }),
+        supabase.from('documents').select('*, folders(name, year, is_active, service_id)').eq('is_active', true).order('published_at', { ascending: false })
       ])
-      if (foldersRes.data) setFolders(foldersRes.data)
-      if (docsRes.data) setDocuments(docsRes.data.filter(doc => !doc.folder_id || doc.folders?.is_active !== false))
+
+      // Charger les services de l'utilisateur (sauf admin)
+      let serviceIds = null
+      if (!isAdmin && profile?.id) {
+        const { data: us } = await supabase.from('user_services').select('service_id').eq('user_id', profile.id)
+        serviceIds = us ? us.map(r => r.service_id) : []
+        setUserServiceIds(serviceIds)
+      }
+
+      if (foldersRes.data) {
+        let visibleFolders = foldersRes.data
+        if (!isAdmin && serviceIds !== null) {
+          // Garder les dossiers sans service OU appartenant aux services de l'utilisateur
+          visibleFolders = foldersRes.data.filter(f => !f.service_id || serviceIds.includes(f.service_id))
+        }
+        setFolders(visibleFolders)
+      }
+
+      if (docsRes.data) {
+        let visibleDocs = docsRes.data.filter(doc => !doc.folder_id || doc.folders?.is_active !== false)
+        if (!isAdmin && serviceIds !== null) {
+          // Garder les docs sans dossier, les docs dans dossier sans service, ou dans dossier du service de l'utilisateur
+          visibleDocs = visibleDocs.filter(doc => {
+            if (!doc.folder_id) return true // pas de dossier → visible
+            const folderServiceId = doc.folders?.service_id
+            if (!folderServiceId) return true // dossier sans service → visible
+            return serviceIds.includes(folderServiceId) // dossier du service de l'utilisateur
+          })
+        }
+        setDocuments(visibleDocs)
+      }
     } catch { toast.error('Erreur lors du chargement') }
     finally { setLoading(false) }
   }
