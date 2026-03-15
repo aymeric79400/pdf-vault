@@ -1169,6 +1169,70 @@ export default function AdminPage() {
         </div>
       )}
 
+
+      {/* ── MODAL SERVICE ── */}
+      {serviceModal && (
+        <div className="modal-overlay" onClick={() => { setServiceModal(false); setEditService(null) }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="font-display">{editService ? 'Modifier le service' : 'Nouveau service'}</h3>
+              <button className="btn btn-ghost" onClick={() => { setServiceModal(false); setEditService(null) }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Nom du service *</label>
+                <input className="input" placeholder="ex: Production, Qualité, RH..." value={serviceForm.name} onChange={e => setServiceForm({ name: e.target.value })} autoFocus />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => { setServiceModal(false); setEditService(null) }}>Annuler</button>
+              <button className="btn btn-primary" onClick={editService ? updateService : createService}>{editService ? 'Modifier' : 'Créer'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL AFFECTATION SERVICES UTILISATEUR ── */}
+      {userServiceModal && selectedUserForService && (
+        <div className="modal-overlay" onClick={() => { setUserServiceModal(false); setSelectedUserForService(null) }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="font-display">Services — {selectedUserForService.full_name || selectedUserForService.username}</h3>
+              <button className="btn btn-ghost" onClick={() => { setUserServiceModal(false); setSelectedUserForService(null) }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13,color:'var(--text-soft)',marginBottom:16}}>
+                Sélectionnez les services accessibles pour cet utilisateur.
+              </p>
+              {services.length === 0
+                ? <p style={{fontSize:13,color:'var(--text-light)'}}>Aucun service créé. Créez d'abord des services dans l'onglet Services.</p>
+                : services.map(s => {
+                    const checked = (userServicesMap[selectedUserForService.id] || []).includes(s.id)
+                    return (
+                      <label key={s.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderBottom:'1px solid var(--border)',cursor:'pointer'}}>
+                        <input type="checkbox" defaultChecked={checked}
+                          onChange={e => {
+                            const current = [...(userServicesMap[selectedUserForService.id] || [])]
+                            const updated = e.target.checked ? [...current, s.id] : current.filter(id => id !== s.id)
+                            setUserServicesMap(prev => ({ ...prev, [selectedUserForService.id]: updated }))
+                          }}
+                          style={{width:16,height:16,accentColor:'var(--green)'}}
+                        />
+                        <span style={{fontSize:14,fontWeight:600,color:s.is_active ? 'var(--text)' : 'var(--text-light)'}}>{s.name}</span>
+                        {!s.is_active && <span style={{fontSize:10,color:'var(--text-light)'}}>(inactif)</span>}
+                      </label>
+                    )
+                  })
+              }
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => { setUserServiceModal(false); setSelectedUserForService(null) }}>Annuler</button>
+              <button className="btn btn-primary" onClick={() => saveUserServices(selectedUserForService.id, userServicesMap[selectedUserForService.id] || [])}>Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .admin-page { min-height:100vh; background:var(--cream); display:flex; flex-direction:column; }
         .admin-back { color:rgba(255,255,255,0.75) !important; } .admin-back:hover { background:rgba(255,255,255,0.1) !important; color:white !important; }
