@@ -6,7 +6,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 
-const TABS = ['documents', 'dossiers', 'utilisateurs', 'statistiques', 'connexions']
+const TABS = ['documents', 'dossiers', 'services', 'utilisateurs', 'statistiques', 'connexions']
 
 function SearchBar({ value, onChange, placeholder }) {
   return (
@@ -40,6 +40,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState([])
   const [loginHistory, setLoginHistory] = useState([])
+  const [services, setServices] = useState([])
+  const [userServicesMap, setUserServicesMap] = useState({}) // { user_id: [service_id] }
 
   // Modals
   const [uploadModal, setUploadModal] = useState(false)
@@ -48,12 +50,17 @@ export default function AdminPage() {
   const [editUserModal, setEditUserModal] = useState(false)
   const [passwordModal, setPasswordModal] = useState(false)
   const [editDoc, setEditDoc] = useState(null)
+  const [serviceModal, setServiceModal] = useState(false)
+  const [editService, setEditService] = useState(null)
+  const [serviceForm, setServiceForm] = useState({ name: '' })
+  const [userServiceModal, setUserServiceModal] = useState(false)
+  const [selectedUserForService, setSelectedUserForService] = useState(null)
   const [editFolder, setEditFolder] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
 
   // Forms
   const [docForm, setDocForm] = useState({ title: '', description: '', folder_id: '', file: null })
-  const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear() })
+  const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear(), service_id: '' })
   const [userForm, setUserForm] = useState(EMPTY_USER)
   const [editUserForm, setEditUserForm] = useState({})
 
@@ -110,7 +117,7 @@ export default function AdminPage() {
   }, [isAdmin])
 
   async function loadAll() {
-    await Promise.all([loadDocuments(), loadFolders(), loadUsers(), loadStats(), loadLoginHistory()])
+    await Promise.all([loadDocuments(), loadFolders(), loadUsers(), loadStats(), loadLoginHistory(), loadServices()])
   }
 
   async function loadDocuments() {
@@ -118,8 +125,18 @@ export default function AdminPage() {
     if (data) setDocuments(data)
   }
   async function loadFolders() {
-    const { data } = await supabase.from('folders').select('*').order('year', { ascending: false })
+    const { data } = await supabase.from('folders').select('*, services(name)').order('year', { ascending: false })
     if (data) setFolders(data)
+  }
+  async function loadServices() {
+    const { data } = await supabase.from('services').select('*').order('name')
+    if (data) setServices(data)
+    const { data: us } = await supabase.from('user_services').select('user_id, service_id')
+    if (us) {
+      const map = {}
+      us.forEach(r => { if (!map[r.user_id]) map[r.user_id] = []; map[r.user_id].push(r.service_id) })
+      setUserServicesMap(map)
+    }
   }
   async function loadUsers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
@@ -186,6 +203,47 @@ export default function AdminPage() {
     if (connDeviceFilter) d = d.filter(x => x.device_type === connDeviceFilter)
     return applySort(d, connSort)
   }, [loginHistory, connSearch, connDeviceFilter, connSort])
+
+
+  // ── SERVICES ──
+  async function createService() {
+    if (!serviceForm.name.trim()) { toast.error('Nom du service requis'); return }
+    const { error } = await supabase.from('services').insert({ name: serviceForm.name.trim() })
+    if (error) { toast.error('Erreur: ' + error.message); return }
+    toast.success('Service créé !')
+    setServiceModal(false); setServiceForm({ name: '' }); loadServices()
+  }
+
+  async function updateService() {
+    if (!editService || !serviceForm.name.trim()) return
+    await supabase.from('services').update({ name: serviceForm.name.trim() }).eq('id', editService.id)
+    toast.success('Service mis à jour')
+    setServiceModal(false); setEditService(null); setServiceForm({ name: '' }); loadServices()
+  }
+
+  async function toggleServiceActive(service) {
+    await supabase.from('services').update({ is_active: !service.is_active }).eq('id', service.id)
+    // Le trigger SQL cascade aux dossiers
+    toast.success(service.is_active ? 'Service désactivé (dossiers masqués)' : 'Service activé')
+    loadServices(); loadFolders()
+  }
+
+  async function deleteService(service) {
+    if (!confirm(`Supprimer le service "${service.name}" ? Les dossiers associés seront détachés.`)) return
+    await supabase.from('services').delete().eq('id', service.id)
+    toast.success('Service supprimé'); loadServices(); loadFolders()
+  }
+
+  async function saveUserServices(userId, selectedServiceIds) {
+    // Supprimer toutes les affectations existantes
+    await supabase.from('user_services').delete().eq('user_id', userId)
+    // Réinsérer les nouvelles
+    if (selectedServiceIds.length > 0) {
+      await supabase.from('user_services').insert(selectedServiceIds.map(sid => ({ user_id: userId, service_id: sid })))
+    }
+    toast.success('Services mis à jour')
+    setUserServiceModal(false); setSelectedUserForService(null); loadServices()
+  }
 
   // ── CRÉER UTILISATEUR ──
   async function createUser() {
@@ -369,7 +427,7 @@ export default function AdminPage() {
     if (!folderForm.name || !folderForm.year) { toast.error('Nom et année requis'); return }
     try {
       if (editFolder) {
-        await supabase.from('folders').update({ name: folderForm.name, year: parseInt(folderForm.year) }).eq('id', editFolder.id)
+        await supabase.from('folders').update({ name: folderForm.name, year: parseInt(folderForm.year), service_id: folderForm.service_id || null }).eq('id', editFolder.id)
         toast.success('Dossier modifié')
       } else {
         await supabase.from('folders').insert({ name: folderForm.name, year: parseInt(folderForm.year) })
@@ -554,7 +612,7 @@ export default function AdminPage() {
     } catch (err) { toast.error('Erreur: ' + err.message) }
   }
 
-  const tabIcons = { documents: '📄', dossiers: '📁', utilisateurs: '👥', statistiques: '📊', connexions: '🕐' }
+  const tabIcons = { documents: '📄', dossiers: '📁', services: '🏢', utilisateurs: '👥', statistiques: '📊', connexions: '🕐' }
 
   return (
     <div className="admin-page">
@@ -677,7 +735,7 @@ export default function AdminPage() {
                           </button>
                         </td>
                         <td className="td-actions">
-                          <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year }); setFolderModal(true) }}>Modifier</button>
+                          <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year, service_id: folder.service_id || '' }); setFolderModal(true) }}>Modifier</button>
                           <button className="btn btn-danger" onClick={() => deleteFolder(folder)}>Supprimer</button>
                         </td>
                       </tr>
@@ -688,6 +746,49 @@ export default function AdminPage() {
                       {folderSearch || folderStatusFilter ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
                     </td></tr>
                   )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+
+        {/* ── SERVICES ── */}
+        {tab === 'services' && (
+          <div>
+            <div className="filters-bar">
+              <button className="btn btn-primary" onClick={() => { setEditService(null); setServiceForm({ name: '' }); setServiceModal(true) }}>+ Nouveau service</button>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Nom du service</th>
+                    <th>Dossiers associés</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {services.map(service => {
+                    const folderCount = folders.filter(f => f.service_id === service.id).length
+                    return (
+                      <tr key={service.id} className={!service.is_active ? 'tr-inactive' : ''}>
+                        <td className="td-title">{service.name}</td>
+                        <td><span className="tag">{folderCount} dossier{folderCount !== 1 ? 's' : ''}</span></td>
+                        <td>
+                          <button className={`toggle-status ${service.is_active ? 'active' : 'inactive'}`} onClick={() => toggleServiceActive(service)}>
+                            <span className="toggle-dot" />{service.is_active ? 'Actif' : 'Inactif'}
+                          </button>
+                        </td>
+                        <td className="td-actions">
+                          <button className="btn btn-ghost" onClick={() => { setEditService(service); setServiceForm({ name: service.name }); setServiceModal(true) }}>Modifier</button>
+                          <button className="btn btn-danger" onClick={() => deleteService(service)}>Supprimer</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {services.length === 0 && <tr><td colSpan={4} className="td-empty">Aucun service — cliquez sur "+ Nouveau service"</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -721,6 +822,7 @@ export default function AdminPage() {
                     <th>Téléphone</th>
                     <th>Rôle</th>
                     <SortHeader label="Créé le" field="created_at" sortField={userSort.field} sortDir={userSort.dir} onSort={f => toggleSort(userSort, f, setUserSort)} />
+                    <th>Services</th>
                     <th>Statut</th>
                     <th>Actions</th>
                   </tr>
@@ -734,6 +836,15 @@ export default function AdminPage() {
                       <td style={{fontSize:12}}>{u.phone || '—'}</td>
                       <td><span className={`tag ${u.role === 'admin' ? 'blue' : ''}`}>{u.role}</span></td>
                       <td>{format(new Date(u.created_at), 'dd/MM/yyyy', { locale: fr })}</td>
+                      <td>
+                        {(userServicesMap[u.id] || []).length === 0
+                          ? <span style={{fontSize:11,color:'var(--text-light)'}}>—</span>
+                          : (userServicesMap[u.id] || []).map(sid => {
+                              const s = services.find(x => x.id === sid)
+                              return s ? <span key={sid} className="tag" style={{marginRight:3,fontSize:10}}>{s.name}</span> : null
+                            })
+                        }
+                      </td>
                       <td><span className={`status-dot ${u.is_active ? 'active' : 'inactive'}`}>{u.is_active ? 'Actif' : 'Inactif'}</span></td>
                       <td className="td-actions">
                         <button className="btn btn-ghost" onClick={() => {
@@ -744,6 +855,7 @@ export default function AdminPage() {
                         <button className="btn btn-ghost" onClick={() => { setSelectedUser(u); setNewPassword(''); setPasswordModal(true) }}>
                           🔑 MDP
                         </button>
+                        <button className="btn btn-ghost" style={{fontSize:11}} onClick={() => { setSelectedUserForService(u); setUserServiceModal(true) }}>🏢 Services</button>
                         <button className="btn btn-test-email" title="Tester l'envoi d'email" onClick={() => testEmailUser(u)}>✉️ Test mail</button>
                         <button className="btn btn-test-push" title="Tester la notification push" onClick={() => testPushUser(u)}>🔔 Test push</button>
                         <button className="btn btn-danger" onClick={() => deleteUser(u)}>Supprimer</button>
@@ -1038,6 +1150,15 @@ export default function AdminPage() {
               <div className="form-group">
                 <label className="form-label">Année *</label>
                 <input className="input" type="number" min="2000" max="2100" value={folderForm.year} onChange={e => setFolderForm(p=>({...p,year:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Service (optionnel)</label>
+                <select className="input" value={folderForm.service_id} onChange={e => setFolderForm(p=>({...p,service_id:e.target.value}))}>
+                  <option value="">— Aucun service —</option>
+                  {services.filter(s => s.is_active).map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="modal-footer">
