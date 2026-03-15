@@ -430,7 +430,7 @@ export default function AdminPage() {
         await supabase.from('folders').update({ name: folderForm.name, year: parseInt(folderForm.year), service_id: folderForm.service_id || null }).eq('id', editFolder.id)
         toast.success('Dossier modifié')
       } else {
-        await supabase.from('folders').insert({ name: folderForm.name, year: parseInt(folderForm.year) })
+        await supabase.from('folders').insert({ name: folderForm.name, year: parseInt(folderForm.year), service_id: folderForm.service_id || null })
         toast.success('Dossier créé')
       }
       setFolderModal(false); setEditFolder(null)
@@ -622,7 +622,7 @@ export default function AdminPage() {
           <h1 className="font-display admin-title">Administration</h1>
         </div>
         <div className="admin-header-actions">
-          <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear() }); setFolderModal(true) }}>+ Nouveau dossier</button>
+          <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear(), service_id: '' }); setFolderModal(true) }}>+ Nouveau dossier</button>
           <button className="btn btn-secondary" onClick={() => { setUserForm(EMPTY_USER); setUserModal(true) }}>+ Créer utilisateur</button>
           <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setUploadModal(true) }}>+ Ajouter PDF</button>
         </div>
@@ -862,7 +862,7 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredUsers.length === 0 && <tr><td colSpan={8} className="td-empty">Aucun résultat</td></tr>}
+                  {filteredUsers.length === 0 && <tr><td colSpan={9} className="td-empty">Aucun résultat</td></tr>}
                 </tbody>
               </table>
             </div>
