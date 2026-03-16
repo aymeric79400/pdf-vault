@@ -134,6 +134,7 @@ const SIDEBAR_STYLES = `
   .doc-title { font-family:var(--font-display); font-size:15px; font-weight:700; color:var(--text); line-height:1.3; margin-bottom:4px; }
   .doc-desc { font-size:12px; color:var(--text-soft); line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .doc-card-footer { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--text-light); padding-top:10px; border-top:1px solid var(--border); }
+  .doc-service { background:var(--straw-pale); color:var(--straw); border:1px solid var(--straw-border); padding:1px 7px; border-radius:99px; font-weight:700; font-size:10px; display:inline-block; }
   .doc-folder { background:var(--green-soft); color:var(--green-deep); padding:2px 8px; border-radius:99px; font-weight:700; }
   .doc-hover-overlay { position:absolute; inset:0; background:rgba(200,38,28,0.03); display:flex; align-items:center; justify-content:center; gap:7px; font-size:13px; font-weight:700; color:var(--red); opacity:0; transition:opacity 0.2s; border-radius:var(--r-lg); }
   .doc-card:hover .doc-hover-overlay { opacity:1; }
@@ -259,7 +260,7 @@ export default function DashboardPage() {
     try {
       const [foldersRes, docsRes] = await Promise.all([
         supabase.from('folders').select('*, services(id, is_active)').eq('is_active', true).order('year', { ascending: false }),
-        supabase.from('documents').select('*, folders(name, year, is_active, service_id)').eq('is_active', true).order('published_at', { ascending: false })
+        supabase.from('documents').select('*, folders(name, year, is_active, service_id, services(name))').eq('is_active', true).order('published_at', { ascending: false })
       ])
 
       // Charger les services de l'utilisateur (sauf admin)
@@ -431,7 +432,12 @@ export default function DashboardPage() {
                   {doc.description && <p className="doc-desc">{doc.description}</p>}
                 </div>
                 <div className="doc-card-footer">
-                  <span className="doc-folder">{doc.folders?.name || '—'}</span>
+                  <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                    {doc.folders?.services?.name && (
+                      <span className="doc-service">{doc.folders.services.name}</span>
+                    )}
+                    <span className="doc-folder">{doc.folders?.name || '—'}</span>
+                  </div>
                   <span className="doc-date">{format(new Date(doc.published_at), 'dd MMM yyyy', { locale: fr })}</span>
                 </div>
                 <div className="doc-hover-overlay">
