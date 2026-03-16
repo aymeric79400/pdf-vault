@@ -761,7 +761,6 @@ export default function AdminPage() {
                   <tr>
                     <th></th>
                     <SortHeader label="Nom" field="name" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
-                    <SortHeader label="Année" field="year" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
                     <th>Service</th>
                     <th>Documents</th>
                     <SortHeader label="Créé le" field="created_at" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
@@ -776,7 +775,6 @@ export default function AdminPage() {
                       <tr key={folder.id} className={!folder.is_active ? 'tr-inactive' : ''}>
                         <td style={{width:32}}>{folder.is_active ? '📁' : '🔒'}</td>
                         <td className="td-title">{folder.name}</td>
-                        <td><span className="tag">{folder.year}</span></td>
                         <td>
                           {folder.service_id
                             ? <span className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)'}}>{services.find(s => s.id === folder.service_id)?.name || '—'}</span>
@@ -798,7 +796,7 @@ export default function AdminPage() {
                     )
                   })}
                   {filteredFolders.length === 0 && (
-                    <tr><td colSpan={7} className="td-empty">
+                    <tr><td colSpan={6} className="td-empty">
                       {folderSearch || folderStatusFilter || folderServiceFilter ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
                     </td></tr>
                   )}
