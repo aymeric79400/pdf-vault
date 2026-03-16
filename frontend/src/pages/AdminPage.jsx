@@ -150,7 +150,7 @@ export default function AdminPage() {
     if (data) setStats(data)
   }
   async function loadLoginHistory() {
-    const { data } = await supabase.from('login_history').select('*, profiles(email, full_name)').order('logged_in_at', { ascending: false }).limit(500)
+    const { data } = await supabase.from('login_history').select('*, profiles(email, full_name, username)').order('logged_in_at', { ascending: false }).limit(500)
     if (data) setLoginHistory(data)
   }
 
@@ -212,7 +212,7 @@ export default function AdminPage() {
 
   const filteredConn = useMemo(() => {
     let d = loginHistory
-    if (connSearch) d = d.filter(x => (x.profiles?.email||'').toLowerCase().includes(connSearch.toLowerCase()) || (x.profiles?.full_name||'').toLowerCase().includes(connSearch.toLowerCase()) || (x.ip_address||'').includes(connSearch))
+    if (connSearch) d = d.filter(x => (x.profiles?.username||'').toLowerCase().includes(connSearch.toLowerCase()) || (x.profiles?.full_name||'').toLowerCase().includes(connSearch.toLowerCase()) || (x.ip_address||'').includes(connSearch))
     if (connDeviceFilter) d = d.filter(x => x.device_type === connDeviceFilter)
     return applySort(d, connSort)
   }, [loginHistory, connSearch, connDeviceFilter, connSort])
@@ -968,7 +968,7 @@ export default function AdminPage() {
         {tab === 'connexions' && (
           <div>
             <div className="filters-bar">
-              <SearchBar value={connSearch} onChange={setConnSearch} placeholder="Email, nom ou IP..." />
+              <SearchBar value={connSearch} onChange={setConnSearch} placeholder="Identifiant, nom ou IP..." />
               <select className="filter-select" value={connDeviceFilter} onChange={e => setConnDeviceFilter(e.target.value)}>
                 <option value="">Tous les appareils</option>
                 <option value="desktop">Desktop</option>
@@ -989,7 +989,7 @@ export default function AdminPage() {
                 <tbody>
                   {filteredConn.map(log => (
                     <tr key={log.id}>
-                      <td>{log.profiles?.email || '—'}<br/><small style={{color:'var(--text-muted)'}}>{log.profiles?.full_name}</small></td>
+                      <td><strong style={{fontSize:13}}>{log.profiles?.username || '—'}</strong><br/><small style={{color:'var(--text-muted)'}}>{log.profiles?.full_name || ''}</small></td>
                       <td>{format(new Date(log.logged_in_at),'dd/MM/yyyy HH:mm',{locale:fr})}</td>
                       <td><code>{log.ip_address || '—'}</code></td>
                       <td><span className="tag">{log.device_type || '—'}</span></td>
