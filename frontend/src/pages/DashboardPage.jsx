@@ -201,7 +201,7 @@ const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents,
         Tous les documents
         {documents.length > 0 && <span className="nav-badge">{documents.length}</span>}
       </button>
-      <div className="nav-section-label" style={{marginTop:10}}>Années</div>
+      <div className="nav-section-label" style={{marginTop:10}}>Dossiers</div>
       {folders.map(folder => (
         <button key={folder.id} className={`nav-item ${selectedFolder === folder.id ? 'active' : ''}`} onClick={() => { setSelectedFolder(folder.id); onClose?.() }}>
           {selectedFolder === folder.id && <span className="nav-active-dot"/>}
