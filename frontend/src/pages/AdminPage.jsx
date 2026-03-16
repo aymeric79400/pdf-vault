@@ -30,6 +30,7 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
 }
 
 const EMPTY_USER = { email: '', password: '', full_name: '', username: '', phone: '', role: 'user' }
+const INTERNAL_DOMAIN = 'planning-viewer.internal'
 
 export default function AdminPage() {
   const { isAdmin, profile: currentProfile } = useAuth()
@@ -247,18 +248,24 @@ export default function AdminPage() {
 
   // ── CRÉER UTILISATEUR ──
   async function createUser() {
-    if (!userForm.email || !userForm.password || !userForm.username) {
-      toast.error('Email, identifiant et mot de passe sont requis')
+    if (!userForm.password || !userForm.username) {
+      toast.error('Identifiant et mot de passe sont requis')
       return
     }
     if (userForm.password.length < 8) {
       toast.error('Le mot de passe doit faire au moins 8 caractères')
       return
     }
+    // Vérifier unicité username
+    const conflict = users.find(u => u.username === userForm.username.toLowerCase().trim())
+    if (conflict) { toast.error('Cet identifiant est déjà utilisé'); return }
+
     setSavingUser(true)
     try {
-        const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
+      const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+      // Email fictif interne si pas d'email réel fourni
+      const authEmail = userForm.email?.trim() || `${userForm.username.toLowerCase().trim()}@${INTERNAL_DOMAIN}`
 
       const res = await fetch(`${functionsUrl}/create-user`, {
         method: 'POST',
@@ -268,12 +275,13 @@ export default function AdminPage() {
           'Authorization': `Bearer ${anonKey}`
         },
         body: JSON.stringify({
-          email: userForm.email,
+          email: authEmail,
           password: userForm.password,
           full_name: userForm.full_name,
-          username: userForm.username,
+          username: userForm.username.toLowerCase().trim(),
           phone: userForm.phone,
-          role: userForm.role
+          role: userForm.role,
+          contact_email: userForm.email?.trim() || null // email réel pour notifications
         })
       })
 
@@ -297,24 +305,32 @@ export default function AdminPage() {
       const conflict = users.find(u => u.username === editUserForm.username && u.id !== selectedUser.id)
       if (conflict) { toast.error('Cet identifiant est déjà utilisé'); return }
     }
-    if (editUserForm.email) {
+    // Vérifier doublon email uniquement si c'est un vrai email (pas fictif)
+    if (editUserForm.email && !editUserForm.email.includes(INTERNAL_DOMAIN)) {
       const conflict = users.find(u => u.email === editUserForm.email && u.id !== selectedUser.id)
       if (conflict) { toast.error('Cet email est déjà utilisé'); return }
     }
     setSavingUser(true)
     try {
-      // Changer email si modifié
-      if (editUserForm.email && editUserForm.email !== selectedUser.email) {
+      const currentAuthEmail = selectedUser.email || ''
+      const newContactEmail = editUserForm.email?.trim() || null
+      const isCurrentFictif = currentAuthEmail.includes(INTERNAL_DOMAIN)
+      const newAuthEmail = newContactEmail || (isCurrentFictif ? currentAuthEmail : null)
+
+      // Changer l'email auth uniquement si :
+      // - Un vrai email est fourni ET c'était un email fictif avant
+      // - OU l'email réel a changé
+      const shouldUpdateAuthEmail =
+        (newContactEmail && isCurrentFictif) ||
+        (newContactEmail && newContactEmail !== currentAuthEmail && !isCurrentFictif)
+
+      if (shouldUpdateAuthEmail && newAuthEmail) {
         const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
         const res = await fetch(`${functionsUrl}/create-user`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': anonKey,
-            'Authorization': `Bearer ${anonKey}`
-          },
-          body: JSON.stringify({ user_id: selectedUser.id, email: editUserForm.email })
+          headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` },
+          body: JSON.stringify({ user_id: selectedUser.id, email: newAuthEmail })
         })
         const result = await res.json()
         if (!res.ok) throw new Error(result.error || 'Erreur changement email')
@@ -323,6 +339,7 @@ export default function AdminPage() {
       await supabase.from('profiles').update({
         full_name: editUserForm.full_name,
         username: editUserForm.username,
+        email: newContactEmail, // email de contact (peut être null)
         phone: editUserForm.phone || null,
         role: editUserForm.role,
         is_active: editUserForm.is_active,
@@ -969,7 +986,7 @@ export default function AdminPage() {
                   <input className="input" placeholder="Dupont Jean" value={userForm.full_name} onChange={e => setUserForm(p=>({...p,full_name:formatFullName(e.target.value)}))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Email *</label>
+                  <label className="form-label">Email de contact <span style={{fontSize:11,color:'var(--text-light)',fontWeight:400}}>(optionnel — pour les notifications)</span></label>
                   <input className="input" type="email" placeholder="jean@exemple.com" value={userForm.email} onChange={e => setUserForm(p=>({...p,email:e.target.value}))} />
                 </div>
                 <div className="form-group">
@@ -1025,7 +1042,7 @@ export default function AdminPage() {
                   <input className="input" placeholder="Dupont Jean" value={editUserForm.full_name} onChange={e => setEditUserForm(p=>({...p,full_name:formatFullName(e.target.value)}))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Email</label>
+                  <label className="form-label">Email de contact <span style={{fontSize:11,color:'var(--text-light)',fontWeight:400}}>(optionnel — pour les notifications)</span></label>
                   <input className="input" type="email" placeholder="email@exemple.com" value={editUserForm.email} onChange={e => setEditUserForm(p=>({...p,email:e.target.value}))} />
                   {editUserForm.email !== selectedUser.email && (
                     <span className="form-hint" style={{color:'var(--warning)'}}>⚠️ L'email sera modifié immédiatement</span>
