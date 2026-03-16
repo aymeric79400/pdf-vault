@@ -90,11 +90,13 @@ export default function AdminPage() {
   const [docSearch, setDocSearch] = useState('')
   const [docFolderFilter, setDocFolderFilter] = useState('')
   const [docStatusFilter, setDocStatusFilter] = useState('')
+  const [docServiceFilter, setDocServiceFilter] = useState('')
   const [docSort, setDocSort] = useState({ field: 'published_at', dir: 'desc' })
 
   // Filtres dossiers
   const [folderSearch, setFolderSearch] = useState('')
   const [folderStatusFilter, setFolderStatusFilter] = useState('')
+  const [folderServiceFilter, setFolderServiceFilter] = useState('')
   const [folderSort, setFolderSort] = useState({ field: 'year', dir: 'desc' })
 
   // Filtres utilisateurs
@@ -174,15 +176,25 @@ export default function AdminPage() {
     if (docFolderFilter === '__none__') d = d.filter(x => !x.folder_id)
     else if (docFolderFilter) d = d.filter(x => x.folder_id === docFolderFilter)
     if (docStatusFilter) d = d.filter(x => docStatusFilter === 'visible' ? x.is_active : !x.is_active)
+    if (docServiceFilter === '__none__') d = d.filter(x => {
+      const folder = folders.find(f => f.id === x.folder_id)
+      return !folder?.service_id
+    })
+    else if (docServiceFilter) d = d.filter(x => {
+      const folder = folders.find(f => f.id === x.folder_id)
+      return folder?.service_id === docServiceFilter
+    })
     return applySort(d, docSort)
-  }, [documents, docSearch, docFolderFilter, docStatusFilter, docSort])
+  }, [documents, folders, docSearch, docFolderFilter, docStatusFilter, docServiceFilter, docSort])
 
   const filteredFolders = useMemo(() => {
     let d = folders
     if (folderSearch) d = d.filter(x => x.name.toLowerCase().includes(folderSearch.toLowerCase()) || String(x.year).includes(folderSearch))
     if (folderStatusFilter) d = d.filter(x => folderStatusFilter === 'visible' ? x.is_active : !x.is_active)
+    if (folderServiceFilter === '__none__') d = d.filter(x => !x.service_id)
+    else if (folderServiceFilter) d = d.filter(x => x.service_id === folderServiceFilter)
     return applySort(d, folderSort)
-  }, [folders, folderSearch, folderStatusFilter, folderSort])
+  }, [folders, folderSearch, folderStatusFilter, folderServiceFilter, folderSort])
 
   const filteredUsers = useMemo(() => {
     let d = users
@@ -670,6 +682,11 @@ export default function AdminPage() {
                 <option value="visible">Visible</option>
                 <option value="masque">Masqué</option>
               </select>
+              <select className="filter-select" value={docServiceFilter} onChange={e => setDocServiceFilter(e.target.value)}>
+                <option value="">Tous les services</option>
+                <option value="__none__">Non affecté</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
               <span className="filter-count">{filteredDocs.length} résultat{filteredDocs.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="data-table-wrapper">
@@ -678,6 +695,7 @@ export default function AdminPage() {
                   <tr>
                     <SortHeader label="Titre" field="title" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
                     <th>Dossier</th>
+                    <th>Service</th>
                     <SortHeader label="Version" field="version" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
                     <SortHeader label="Taille" field="file_size" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
                     <SortHeader label="Publié le" field="published_at" sortField={docSort.field} sortDir={docSort.dir} onSort={f => toggleSort(docSort, f, setDocSort)} />
@@ -689,6 +707,15 @@ export default function AdminPage() {
                     <tr key={doc.id}>
                       <td className="td-title">{doc.title}</td>
                       <td><span className="tag">{doc.folders?.name || <em style={{color:'var(--text-muted)'}}>Sans dossier</em>}</span></td>
+                      <td>
+                        {(() => {
+                          const folder = folders.find(f => f.id === doc.folder_id)
+                          const service = folder?.service_id ? services.find(s => s.id === folder.service_id) : null
+                          return service
+                            ? <span className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)'}}>{service.name}</span>
+                            : <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
+                        })()}
+                      </td>
                       <td><span className="tag blue">v{doc.version}</span></td>
                       <td>{doc.file_size ? `${(doc.file_size/1024/1024).toFixed(1)} Mo` : '—'}</td>
                       <td>{format(new Date(doc.published_at), 'dd/MM/yyyy', { locale: fr })}</td>
@@ -704,7 +731,7 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredDocs.length === 0 && <tr><td colSpan={7} className="td-empty">Aucun résultat</td></tr>}
+                  {filteredDocs.length === 0 && <tr><td colSpan={8} className="td-empty">Aucun résultat</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -721,6 +748,11 @@ export default function AdminPage() {
                 <option value="visible">Visible</option>
                 <option value="masque">Masqué</option>
               </select>
+              <select className="filter-select" value={folderServiceFilter} onChange={e => setFolderServiceFilter(e.target.value)}>
+                <option value="">Tous les services</option>
+                <option value="__none__">Non affecté</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
               <span className="filter-count">{filteredFolders.length} dossier{filteredFolders.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="data-table-wrapper">
@@ -730,6 +762,7 @@ export default function AdminPage() {
                     <th></th>
                     <SortHeader label="Nom" field="name" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
                     <SortHeader label="Année" field="year" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
+                    <th>Service</th>
                     <th>Documents</th>
                     <SortHeader label="Créé le" field="created_at" sortField={folderSort.field} sortDir={folderSort.dir} onSort={f => toggleSort(folderSort, f, setFolderSort)} />
                     <th>Statut</th>
@@ -744,6 +777,12 @@ export default function AdminPage() {
                         <td style={{width:32}}>{folder.is_active ? '📁' : '🔒'}</td>
                         <td className="td-title">{folder.name}</td>
                         <td><span className="tag">{folder.year}</span></td>
+                        <td>
+                          {folder.service_id
+                            ? <span className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)'}}>{services.find(s => s.id === folder.service_id)?.name || '—'}</span>
+                            : <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
+                          }
+                        </td>
                         <td>{docCount} document{docCount !== 1 ? 's' : ''}</td>
                         <td style={{fontSize:12}}>{folder.created_at ? format(new Date(folder.created_at), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
                         <td>
@@ -760,7 +799,7 @@ export default function AdminPage() {
                   })}
                   {filteredFolders.length === 0 && (
                     <tr><td colSpan={7} className="td-empty">
-                      {folderSearch || folderStatusFilter ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
+                      {folderSearch || folderStatusFilter || folderServiceFilter ? 'Aucun résultat' : 'Aucun dossier — cliquez sur "+ Nouveau dossier" pour commencer'}
                     </td></tr>
                   )}
                 </tbody>
