@@ -206,7 +206,14 @@ const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents,
         <button key={folder.id} className={`nav-item ${selectedFolder === folder.id ? 'active' : ''}`} onClick={() => { setSelectedFolder(folder.id); onClose?.() }}>
           {selectedFolder === folder.id && <span className="nav-active-dot"/>}
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          <span>{folder.name}{folder.service_id && folder.services?.name ? <span style={{fontSize:9,opacity:0.5,display:'block',lineHeight:1}}>{folder.services.name}</span> : null}</span>
+          <span>
+            {folder.name}
+            {(folder.folder_services || []).length > 0 &&
+              <span style={{fontSize:9,opacity:0.5,display:'block',lineHeight:1}}>
+                {(folder.folder_services || []).map(fs => fs.services?.name).filter(Boolean).join(', ')}
+              </span>
+            }
+          </span>
           <span className="nav-badge">{documents.filter(d => d.folder_id === folder.id).length}</span>
         </button>
       ))}
@@ -258,11 +265,6 @@ export default function DashboardPage() {
 
   async function loadData() {
     try {
-      const [foldersRes, docsRes] = await Promise.all([
-        supabase.from('folders').select('*, services(id, is_active)').eq('is_active', true).order('year', { ascending: false }),
-        supabase.from('documents').select('*, folders(name, year, is_active, service_id, services(name))').eq('is_active', true).order('published_at', { ascending: false })
-      ])
-
       // Charger les services de l'utilisateur (sauf admin)
       let serviceIds = null
       if (!isAdmin && profile?.id) {
@@ -271,24 +273,44 @@ export default function DashboardPage() {
         setUserServiceIds(serviceIds)
       }
 
+      const [foldersRes, docsRes] = await Promise.all([
+        supabase.from('folders')
+          .select('*, folder_services(service_id, services(id, name, is_active))')
+          .eq('is_active', true)
+          .order('name'),
+        supabase.from('documents')
+          .select('*, document_folders(folder_id, folders(id, name, is_active, folder_services(service_id, services(id, name))))')
+          .eq('is_active', true)
+          .order('published_at', { ascending: false })
+      ])
+
       if (foldersRes.data) {
         let visibleFolders = foldersRes.data
         if (!isAdmin && serviceIds !== null) {
-          // Garder les dossiers sans service OU appartenant aux services de l'utilisateur
-          visibleFolders = foldersRes.data.filter(f => !f.service_id || serviceIds.includes(f.service_id))
+          visibleFolders = foldersRes.data.filter(f => {
+            const fServiceIds = (f.folder_services || []).map(fs => fs.service_id)
+            if (fServiceIds.length === 0) return true // pas de service → visible
+            return fServiceIds.some(sid => serviceIds.includes(sid))
+          })
         }
         setFolders(visibleFolders)
       }
 
       if (docsRes.data) {
-        let visibleDocs = docsRes.data.filter(doc => !doc.folder_id || doc.folders?.is_active !== false)
+        let visibleDocs = docsRes.data.filter(doc => {
+          const docFolders = doc.document_folders || []
+          if (docFolders.length === 0) return true
+          return docFolders.every(df => df.folders?.is_active !== false)
+        })
         if (!isAdmin && serviceIds !== null) {
-          // Garder les docs sans dossier, les docs dans dossier sans service, ou dans dossier du service de l'utilisateur
           visibleDocs = visibleDocs.filter(doc => {
-            if (!doc.folder_id) return true // pas de dossier → visible
-            const folderServiceId = doc.folders?.service_id
-            if (!folderServiceId) return true // dossier sans service → visible
-            return serviceIds.includes(folderServiceId) // dossier du service de l'utilisateur
+            const docFolders = doc.document_folders || []
+            if (docFolders.length === 0) return true
+            return docFolders.some(df => {
+              const fServiceIds = (df.folders?.folder_services || []).map(fs => fs.service_id)
+              if (fServiceIds.length === 0) return true
+              return fServiceIds.some(sid => serviceIds.includes(sid))
+            })
           })
         }
         setDocuments(visibleDocs)
@@ -309,13 +331,13 @@ export default function DashboardPage() {
   async function openDocument(doc) {
     navigate(`/viewer/${doc.id}`)
     if (newDocStatus[doc.id]) {
-      await supabase.rpc('mark_document_viewed', { doc_id: doc.id })
+      await supabase.rpc('mark_document_viewed', { doc_id: doc.id }).catch(() => {})
       setNewDocStatus(prev => ({ ...prev, [doc.id]: false }))
     }
   }
 
   const filteredDocs = documents.filter(doc => {
-    const matchesFolder = selectedFolder ? doc.folder_id === selectedFolder : true
+    const matchesFolder = selectedFolder ? (doc.document_folders || []).some(df => df.folder_id === selectedFolder) : true
     const matchesSearch = searchQuery ? doc.title.toLowerCase().includes(searchQuery.toLowerCase()) : true
     return matchesFolder && matchesSearch
   })
@@ -433,10 +455,17 @@ export default function DashboardPage() {
                 </div>
                 <div className="doc-card-footer">
                   <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                    {doc.folders?.services?.name && (
-                      <span className="doc-service">{doc.folders.services.name}</span>
-                    )}
-                    <span className="doc-folder">{doc.folders?.name || '—'}</span>
+                    {(() => {
+                      const docFolders = doc.document_folders || []
+                      const serviceNames = [...new Set(docFolders.flatMap(df =>
+                        (df.folders?.folder_services || []).map(fs => fs.services?.name).filter(Boolean)
+                      ))]
+                      const folderNames = docFolders.map(df => df.folders?.name).filter(Boolean)
+                      return <>
+                        {serviceNames.length > 0 && <span className="doc-service">{serviceNames.join(', ')}</span>}
+                        <span className="doc-folder">{folderNames.length > 0 ? folderNames.join(', ') : '—'}</span>
+                      </>
+                    })()}
                   </div>
                   <span className="doc-date">{format(new Date(doc.published_at), 'dd MMM yyyy', { locale: fr })}</span>
                 </div>
