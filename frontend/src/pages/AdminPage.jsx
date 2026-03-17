@@ -29,7 +29,7 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
   )
 }
 
-const EMPTY_USER = { email: '', password: '', full_name: '', username: '', phone: '', role: 'user' }
+const EMPTY_USER = { email: '', password: '', full_name: '', username: '', phone: '', role: 'user', services: [] }
 const INTERNAL_DOMAIN = 'planning-viewer.internal'
 
 export default function AdminPage() {
@@ -61,6 +61,7 @@ export default function AdminPage() {
 
   // Forms
   const [docForm, setDocForm] = useState({ title: '', description: '', folder_id: '', file: null })
+  const [docFormService, setDocFormService] = useState('')
   const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear(), service_id: '' })
   const [userForm, setUserForm] = useState(EMPTY_USER)
   const [editUserForm, setEditUserForm] = useState({})
@@ -300,10 +301,16 @@ export default function AdminPage() {
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Erreur création')
 
+      // Affecter les services si sélectionnés
+      if (userForm.services?.length > 0) {
+        await supabase.from('user_services').insert(
+          userForm.services.map(sid => ({ user_id: result.user_id, service_id: sid }))
+        )
+      }
       toast.success(`Utilisateur "${userForm.username}" créé avec succès !`)
       setUserModal(false)
       setUserForm(EMPTY_USER)
-      loadUsers()
+      loadUsers(); loadServices()
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -653,7 +660,7 @@ export default function AdminPage() {
         <div className="admin-header-actions">
           <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear(), service_id: '' }); setFolderModal(true) }}>+ Nouveau dossier</button>
           <button className="btn btn-secondary" onClick={() => { setUserForm(EMPTY_USER); setUserModal(true) }}>+ Créer utilisateur</button>
-          <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setUploadModal(true) }}>+ Ajouter PDF</button>
+          <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setDocFormService(''); setUploadModal(true) }}>+ Ajouter PDF</button>
         </div>
       </header>
 
@@ -1167,10 +1174,25 @@ export default function AdminPage() {
                 <textarea className="input" rows={3} placeholder="Description optionnelle" value={docForm.description} onChange={e => setDocForm(p=>({...p,description:e.target.value}))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Dossier <span style={{color:'var(--text-muted)',fontWeight:400}}>(optionnel)</span></label>
+                <label className="form-label">Service <span style={{color:'var(--text-soft)',fontWeight:400}}>(optionnel — filtre les dossiers)</span></label>
+                <select className="input" value={docFormService} onChange={e => { setDocFormService(e.target.value); setDocForm(p=>({...p,folder_id:''})) }}>
+                  <option value="">— Tous les services —</option>
+                  <option value="__none__">Non affecté</option>
+                  {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Dossier <span style={{color:'var(--text-soft)',fontWeight:400}}>(optionnel)</span></label>
                 <select className="input" value={docForm.folder_id} onChange={e => setDocForm(p=>({...p,folder_id:e.target.value}))}>
                   <option value="">— Sans dossier —</option>
-                  {folders.map(f => <option key={f.id} value={f.id}>{f.name} ({f.year})</option>)}
+                  {folders
+                    .filter(f => {
+                      if (!docFormService) return true
+                      if (docFormService === '__none__') return !f.service_id
+                      return f.service_id === docFormService
+                    })
+                    .map(f => <option key={f.id} value={f.id}>{f.name}</option>)
+                  }
                 </select>
               </div>
               <div className="form-group">
@@ -1202,10 +1224,6 @@ export default function AdminPage() {
                 <input className="input" placeholder="ex: Documents 2025" value={folderForm.name} onChange={e => setFolderForm(p=>({...p,name:e.target.value}))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Année *</label>
-                <input className="input" type="number" min="2000" max="2100" value={folderForm.year} onChange={e => setFolderForm(p=>({...p,year:e.target.value}))} />
-              </div>
-              <div className="form-group">
                 <label className="form-label">Service (optionnel)</label>
                 <select className="input" value={folderForm.service_id} onChange={e => setFolderForm(p=>({...p,service_id:e.target.value}))}>
                   <option value="">— Aucun service —</option>
@@ -1227,7 +1245,7 @@ export default function AdminPage() {
       {/* ── MODAL SERVICE ── */}
       {serviceModal && (
         <div className="modal-overlay" onClick={() => { setServiceModal(false); setEditService(null) }}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="font-display">{editService ? 'Modifier le service' : 'Nouveau service'}</h3>
               <button className="btn btn-ghost" onClick={() => { setServiceModal(false); setEditService(null) }}>✕</button>
@@ -1249,7 +1267,7 @@ export default function AdminPage() {
       {/* ── MODAL AFFECTATION SERVICES UTILISATEUR ── */}
       {userServiceModal && selectedUserForService && (
         <div className="modal-overlay" onClick={() => { setUserServiceModal(false); setSelectedUserForService(null) }}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="font-display">Services — {selectedUserForService.full_name || selectedUserForService.username}</h3>
               <button className="btn btn-ghost" onClick={() => { setUserServiceModal(false); setSelectedUserForService(null) }}>✕</button>
