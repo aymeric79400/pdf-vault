@@ -745,19 +745,19 @@ export default function AdminPage() {
                     <tr key={doc.id}>
                       <td className="td-title">{doc.title}</td>
                       <td>
-                        {(doc.document_folders || []).length === 0
+                        {(documentFoldersMap[doc.id] || []).length === 0
                           ? <em style={{fontSize:11,color:'var(--text-light)'}}>Sans dossier</em>
-                          : (doc.document_folders || []).map(df => (
-                              <span key={df.folder_id} className="tag" style={{marginRight:3}}>{df.folders?.name}</span>
-                            ))
+                          : (documentFoldersMap[doc.id] || []).map(fid => {
+                              const f = folders.find(x => x.id === fid)
+                              return f ? <span key={fid} className="tag" style={{marginRight:3}}>{f.name}</span> : null
+                            })
                         }
                       </td>
                       <td>
                         {(() => {
-                          const docFolders = doc.document_folders || []
-                          const serviceNames = [...new Set(docFolders.flatMap(df =>
-                            (df.folders?.folder_services || []).map(fs => fs.services?.name).filter(Boolean)
-                          ))]
+                          const folderIds = documentFoldersMap[doc.id] || []
+                          const serviceIds = [...new Set(folderIds.flatMap(fid => folderServicesMap[fid] || []))]
+                          const serviceNames = serviceIds.map(sid => services.find(s => s.id === sid)?.name).filter(Boolean)
                           return serviceNames.length === 0
                             ? <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
                             : serviceNames.map((name, i) => (
@@ -825,13 +825,12 @@ export default function AdminPage() {
                         <td style={{width:32}}>{folder.is_active ? '📁' : '🔒'}</td>
                         <td className="td-title">{folder.name}</td>
                         <td>
-                          {(folder.folder_services || []).length === 0
+                          {(folderServicesMap[folder.id] || []).length === 0
                             ? <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
-                            : (folder.folder_services || []).map(fs => (
-                                <span key={fs.service_id} className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)',marginRight:3}}>
-                                  {fs.services?.name || '—'}
-                                </span>
-                              ))
+                            : (folderServicesMap[folder.id] || []).map(sid => {
+                                const s = services.find(x => x.id === sid)
+                                return s ? <span key={sid} className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)',marginRight:3}}>{s.name}</span> : null
+                              })
                           }
                         </td>
                         <td>{docCount} document{docCount !== 1 ? 's' : ''}</td>
@@ -878,7 +877,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {services.map(service => {
-                    const folderCount = folders.filter(f => f.service_id === service.id).length
+                    const folderCount = Object.entries(folderServicesMap).filter(([, sids]) => sids.includes(service.id)).length
                     return (
                       <tr key={service.id} className={!service.is_active ? 'tr-inactive' : ''}>
                         <td className="td-title">{service.name}</td>
