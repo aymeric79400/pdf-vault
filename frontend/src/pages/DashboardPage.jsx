@@ -214,7 +214,7 @@ const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents,
               </span>
             }
           </span>
-          <span className="nav-badge">{documents.filter(d => d.folder_id === folder.id).length}</span>
+          <span className="nav-badge">{documents.filter(d => (d.document_folders || []).some(df => df.folder_id === folder.id)).length}</span>
         </button>
       ))}
       {isAdmin && (
@@ -258,10 +258,11 @@ export default function DashboardPage() {
   const [userServiceIds, setUserServiceIds] = useState(null) // null = admin (tout voir)
 
   useEffect(() => {
+    if (profile === null && !isAdmin) return // Attendre que le profil soit chargé
     loadData()
     loadNewDocStatus()
     requestPushPermission().then(granted => { if (granted) subscribePush() })
-  }, [location.key])
+  }, [location.key, profile?.id, isAdmin])
 
   async function loadData() {
     try {
