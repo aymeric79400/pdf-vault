@@ -43,6 +43,8 @@ export default function AdminPage() {
   const [loginHistory, setLoginHistory] = useState([])
   const [services, setServices] = useState([])
   const [userServicesMap, setUserServicesMap] = useState({}) // { user_id: [service_id] }
+  const [documentFoldersMap, setDocumentFoldersMap] = useState({}) // { document_id: [folder_id] }
+  const [folderServicesMap, setFolderServicesMap] = useState({}) // { folder_id: [service_id] }
 
   // Modals
   const [uploadModal, setUploadModal] = useState(false)
@@ -60,9 +62,9 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState(null)
 
   // Forms
-  const [docForm, setDocForm] = useState({ title: '', description: '', folder_id: '', file: null })
+  const [docForm, setDocForm] = useState({ title: '', description: '', folder_ids: [], service_ids: [], file: null })
   const [docFormService, setDocFormService] = useState('')
-  const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear(), service_id: '' })
+  const [folderForm, setFolderForm] = useState({ name: '', year: new Date().getFullYear(), service_ids: [] })
   const [userForm, setUserForm] = useState(EMPTY_USER)
   const [editUserForm, setEditUserForm] = useState({})
 
@@ -125,12 +127,26 @@ export default function AdminPage() {
   }
 
   async function loadDocuments() {
-    const { data } = await supabase.from('documents').select('*, folders(name)').order('published_at', { ascending: false })
+    const { data } = await supabase.from('documents').select('*').order('published_at', { ascending: false })
     if (data) setDocuments(data)
+    // Charger les relations document→dossiers
+    const { data: df } = await supabase.from('document_folders').select('document_id, folder_id')
+    if (df) {
+      const map = {}
+      df.forEach(r => { if (!map[r.document_id]) map[r.document_id] = []; map[r.document_id].push(r.folder_id) })
+      setDocumentFoldersMap(map)
+    }
   }
   async function loadFolders() {
-    const { data } = await supabase.from('folders').select('*, services(name)').order('year', { ascending: false })
+    const { data } = await supabase.from('folders').select('*').order('name')
     if (data) setFolders(data)
+    // Charger les relations dossier→services
+    const { data: fs } = await supabase.from('folder_services').select('folder_id, service_id')
+    if (fs) {
+      const map = {}
+      fs.forEach(r => { if (!map[r.folder_id]) map[r.folder_id] = []; map[r.folder_id].push(r.service_id) })
+      setFolderServicesMap(map)
+    }
   }
   async function loadServices() {
     const { data } = await supabase.from('services').select('*').order('name')
@@ -174,17 +190,17 @@ export default function AdminPage() {
   const filteredDocs = useMemo(() => {
     let d = documents
     if (docSearch) d = d.filter(x => x.title.toLowerCase().includes(docSearch.toLowerCase()) || (x.description||'').toLowerCase().includes(docSearch.toLowerCase()))
-    if (docFolderFilter === '__none__') d = d.filter(x => !x.folder_id)
-    else if (docFolderFilter) d = d.filter(x => x.folder_id === docFolderFilter)
+    if (docFolderFilter === '__none__') d = d.filter(x => !x.document_folders?.length)
+    else if (docFolderFilter) d = d.filter(x => (documentFoldersMap[x.id] || []).includes(docFolderFilter))
     if (docStatusFilter) d = d.filter(x => docStatusFilter === 'visible' ? x.is_active : !x.is_active)
-    if (docServiceFilter === '__none__') d = d.filter(x => {
-      const folder = folders.find(f => f.id === x.folder_id)
-      return !folder?.service_id
-    })
-    else if (docServiceFilter) d = d.filter(x => {
-      const folder = folders.find(f => f.id === x.folder_id)
-      return folder?.service_id === docServiceFilter
-    })
+    if (docServiceFilter === '__none__') d = d.filter(x =>
+      !(x.document_folders || []).some(df => (df.folders?.folder_services || []).length > 0)
+    )
+    else if (docServiceFilter) d = d.filter(x =>
+      (x.document_folders || []).some(df =>
+        (df.folders?.folder_services || []).some(fs => fs.service_id === docServiceFilter)
+      )
+    )
     return applySort(d, docSort)
   }, [documents, folders, docSearch, docFolderFilter, docStatusFilter, docServiceFilter, docSort])
 
@@ -192,8 +208,8 @@ export default function AdminPage() {
     let d = folders
     if (folderSearch) d = d.filter(x => x.name.toLowerCase().includes(folderSearch.toLowerCase()) || String(x.year).includes(folderSearch))
     if (folderStatusFilter) d = d.filter(x => folderStatusFilter === 'visible' ? x.is_active : !x.is_active)
-    if (folderServiceFilter === '__none__') d = d.filter(x => !x.service_id)
-    else if (folderServiceFilter) d = d.filter(x => x.service_id === folderServiceFilter)
+    if (folderServiceFilter === '__none__') d = d.filter(x => !(x.folder_services || []).length)
+    else if (folderServiceFilter) d = d.filter(x => (x.folder_services || []).some(fs => fs.service_id === folderServiceFilter))
     return applySort(d, folderSort)
   }, [folders, folderSearch, folderStatusFilter, folderServiceFilter, folderSort])
 
@@ -460,28 +476,35 @@ export default function AdminPage() {
 
   // ── DOSSIERS ──
   async function saveFolder() {
-    if (!folderForm.name || !folderForm.year) { toast.error('Nom et année requis'); return }
+    if (!folderForm.name) { toast.error('Nom requis'); return }
     try {
+      let folderId
       if (editFolder) {
-        await supabase.from('folders').update({ name: folderForm.name, year: parseInt(folderForm.year), service_id: folderForm.service_id || null }).eq('id', editFolder.id)
-        toast.success('Dossier modifié')
+        await supabase.from('folders').update({ name: folderForm.name }).eq('id', editFolder.id)
+        folderId = editFolder.id
+        // Mettre à jour les services
+        await supabase.from('folder_services').delete().eq('folder_id', folderId)
       } else {
-        await supabase.from('folders').insert({ name: folderForm.name, year: parseInt(folderForm.year), service_id: folderForm.service_id || null })
-        toast.success('Dossier créé')
+        const { data } = await supabase.from('folders').insert({ name: folderForm.name, year: new Date().getFullYear() }).select().single()
+        folderId = data.id
       }
+      // Insérer les nouvelles relations services
+      if (folderForm.service_ids?.length > 0) {
+        await supabase.from('folder_services').insert(folderForm.service_ids.map(sid => ({ folder_id: folderId, service_id: sid })))
+      }
+      toast.success(editFolder ? 'Dossier modifié' : 'Dossier créé')
       setFolderModal(false); setEditFolder(null)
-      setFolderForm({ name: '', year: new Date().getFullYear() })
+      setFolderForm({ name: '', year: new Date().getFullYear(), service_ids: [] })
       loadFolders()
     } catch (err) { toast.error('Erreur: ' + err.message) }
   }
 
   async function deleteFolder(folder) {
-    const count = documents.filter(d => d.folder_id === folder.id).length
+    const count = Object.values(documentFoldersMap).filter(fids => fids.includes(folder.id)).length
     const msg = count > 0
-      ? `Ce dossier contient ${count} document(s) qui seront déplacés hors dossier. Continuer ?`
+      ? `Ce dossier contient ${count} document(s) qui seront détachés. Continuer ?`
       : `Supprimer le dossier "${folder.name}" ?`
     if (!confirm(msg)) return
-    if (count > 0) await supabase.from('documents').update({ folder_id: null }).eq('folder_id', folder.id)
     await supabase.from('folders').delete().eq('id', folder.id)
     toast.success('Dossier supprimé')
     loadAll()
@@ -518,7 +541,8 @@ export default function AdminPage() {
     if (!user.email) { toast.error('Cet utilisateur n\'a pas d\'email renseigné'); return }
     const lastDoc = documents.filter(d => d.is_active).sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0]
     if (!lastDoc) { toast.error('Aucun document disponible pour le test'); return }
-    const folder = folders.find(f => f.id === lastDoc.folder_id)
+    const folderIds = documentFoldersMap[lastDoc.id] || []
+    const folder = folderIds.length > 0 ? folders.find(f => f.id === folderIds[0]) : null
     try {
       const res = await fetch('/api/send-email-single', {
         method: 'POST',
@@ -538,7 +562,8 @@ export default function AdminPage() {
   async function testPushUser(user) {
     const lastDoc = documents.filter(d => d.is_active).sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0]
     if (!lastDoc) { toast.error('Aucun document disponible pour le test'); return }
-    const folder = folders.find(f => f.id === lastDoc.folder_id)
+    const folderIds2 = documentFoldersMap[lastDoc.id] || []
+    const folder = folderIds2.length > 0 ? folders.find(f => f.id === folderIds2[0]) : null
     try {
       const res = await fetch('/api/send-push-single', {
         method: 'POST',
@@ -563,34 +588,39 @@ export default function AdminPage() {
     setUploading(true)
     try {
       const fileName = `${Date.now()}_${docForm.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-      const folder = folders.find(f => f.id === docForm.folder_id)
-      const filePath = `${folder ? folder.year : 'divers'}/${fileName}`
+      const filePath = `divers/${fileName}`
       const { error: uploadErr } = await supabase.storage.from('pdfs').upload(filePath, docForm.file, { contentType: 'application/pdf' })
       if (uploadErr) throw uploadErr
-      const { error: dbErr } = await supabase.from('documents').insert({
+
+      // Insérer le document sans folder_id (géré via document_folders)
+      const { data: newDoc, error: dbErr } = await supabase.from('documents').insert({
         title: docForm.title, description: docForm.description,
-        folder_id: docForm.folder_id || null, file_path: filePath, file_size: docForm.file.size,
-      })
+        file_path: filePath, file_size: docForm.file.size,
+      }).select().single()
       if (dbErr) throw dbErr
+
+      // Affecter les dossiers
+      if (docForm.folder_ids?.length > 0) {
+        await supabase.from('document_folders').insert(
+          docForm.folder_ids.map(fid => ({ document_id: newDoc.id, folder_id: fid }))
+        )
+      }
+
+      // Notifications in-app
       const { data: activeUsers } = await supabase.from('profiles').select('id').eq('is_active', true).eq('role', 'user')
       if (activeUsers?.length) {
+        const folderNames = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
         await supabase.from('notifications').insert(activeUsers.map(u => ({
           user_id: u.id, type: 'new_document',
           title: '📄 Nouveau document disponible',
-          message: `"${docForm.title}" a été publié${folder ? ' dans ' + folder.name : ''}`,
+          message: `"${docForm.title}" a été publié${folderNames ? ' dans ' + folderNames : ''}`,
         })))
       }
       toast.success('Document publié !')
-      await sendDocumentEmail('new_document', {
-        title: docForm.title,
-        description: docForm.description || '',
-        folder_name: folder?.name || '',
-      })
-      await sendPushNotification('new_document', {
-        title: docForm.title,
-        folder_name: folder?.name || '',
-      })
-      setUploadModal(false); setDocForm({ title: '', description: '', folder_id: '', file: null })
+      const folderName = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
+      await sendDocumentEmail('new_document', { title: docForm.title, description: docForm.description || '', folder_name: folderName })
+      await sendPushNotification('new_document', { title: docForm.title, folder_name: folderName })
+      setUploadModal(false); setDocForm({ title: '', description: '', folder_ids: [], file: null }); setDocFormService('')
       loadAll()
     } catch (err) { toast.error('Erreur: ' + err.message) }
     finally { setUploading(false) }
@@ -601,18 +631,27 @@ export default function AdminPage() {
     setUploading(true)
     try {
       let filePath = editDoc.file_path
-      const folder = folders.find(f => f.id === (docForm.folder_id || editDoc.folder_id))
       if (docForm.file) {
         const fileName = `${Date.now()}_${docForm.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-        filePath = `${folder ? folder.year : 'divers'}/${fileName}`
+        filePath = `divers/${fileName}`
         await supabase.storage.from('pdfs').upload(filePath, docForm.file, { contentType: 'application/pdf' })
         await supabase.storage.from('pdfs').remove([editDoc.file_path])
       }
       await supabase.from('documents').update({
-        title: docForm.title || editDoc.title, description: docForm.description,
-        folder_id: docForm.folder_id || null, file_path: filePath,
+        title: docForm.title || editDoc.title,
+        description: docForm.description,
+        file_path: filePath,
         version: editDoc.version + (docForm.file ? 1 : 0),
       }).eq('id', editDoc.id)
+
+      // Mettre à jour les dossiers (supprimer puis réinsérer)
+      await supabase.from('document_folders').delete().eq('document_id', editDoc.id)
+      if (docForm.folder_ids?.length > 0) {
+        await supabase.from('document_folders').insert(
+          docForm.folder_ids.map(fid => ({ document_id: editDoc.id, folder_id: fid }))
+        )
+      }
+
       if (docForm.file) {
         const { data: viewers } = await supabase.from('document_views').select('user_id').eq('document_id', editDoc.id)
         const uniq = [...new Set(viewers?.map(v => v.user_id))]
@@ -620,20 +659,12 @@ export default function AdminPage() {
           user_id: uid, document_id: editDoc.id, type: 'updated_document',
           title: '🔄 Document mis à jour', message: `"${docForm.title || editDoc.title}" a été mis à jour`,
         })))
+        const folderName = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
+        await sendDocumentEmail('updated_document', { title: docForm.title || editDoc.title, description: docForm.description || '', folder_name: folderName })
+        await sendPushNotification('updated_document', { title: docForm.title || editDoc.title, folder_name: folderName })
       }
       toast.success('Document mis à jour')
-      if (docForm.file) {
-        await sendDocumentEmail('updated_document', {
-          title: docForm.title || editDoc.title,
-          description: docForm.description || editDoc.description || '',
-          folder_name: folder?.name || '',
-        })
-        await sendPushNotification('updated_document', {
-          title: docForm.title || editDoc.title,
-          folder_name: folder?.name || '',
-        })
-      }
-      setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null })
+      setEditDoc(null); setDocForm({ title: '', description: '', folder_ids: [], file: null }); setDocFormService('')
       setUploadModal(false); loadAll()
     } catch (err) { toast.error('Erreur: ' + err.message) }
     finally { setUploading(false) }
@@ -658,9 +689,9 @@ export default function AdminPage() {
           <h1 className="font-display admin-title">Administration</h1>
         </div>
         <div className="admin-header-actions">
-          <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear(), service_id: '' }); setFolderModal(true) }}>+ Nouveau dossier</button>
+          <button className="btn btn-secondary" onClick={() => { setEditFolder(null); setFolderForm({ name: '', year: new Date().getFullYear(), service_ids: [] }); setFolderModal(true) }}>+ Nouveau dossier</button>
           <button className="btn btn-secondary" onClick={() => { setUserForm(EMPTY_USER); setUserModal(true) }}>+ Créer utilisateur</button>
-          <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_id: '', file: null }); setDocFormService(''); setUploadModal(true) }}>+ Ajouter PDF</button>
+          <button className="btn btn-primary" onClick={() => { setEditDoc(null); setDocForm({ title: '', description: '', folder_ids: [], file: null }); setDocFormService(''); setUploadModal(true) }}>+ Ajouter PDF</button>
         </div>
       </header>
 
@@ -713,14 +744,25 @@ export default function AdminPage() {
                   {filteredDocs.map(doc => (
                     <tr key={doc.id}>
                       <td className="td-title">{doc.title}</td>
-                      <td><span className="tag">{doc.folders?.name || <em style={{color:'var(--text-muted)'}}>Sans dossier</em>}</span></td>
+                      <td>
+                        {(doc.document_folders || []).length === 0
+                          ? <em style={{fontSize:11,color:'var(--text-light)'}}>Sans dossier</em>
+                          : (doc.document_folders || []).map(df => (
+                              <span key={df.folder_id} className="tag" style={{marginRight:3}}>{df.folders?.name}</span>
+                            ))
+                        }
+                      </td>
                       <td>
                         {(() => {
-                          const folder = folders.find(f => f.id === doc.folder_id)
-                          const service = folder?.service_id ? services.find(s => s.id === folder.service_id) : null
-                          return service
-                            ? <span className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)'}}>{service.name}</span>
-                            : <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
+                          const docFolders = doc.document_folders || []
+                          const serviceNames = [...new Set(docFolders.flatMap(df =>
+                            (df.folders?.folder_services || []).map(fs => fs.services?.name).filter(Boolean)
+                          ))]
+                          return serviceNames.length === 0
+                            ? <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
+                            : serviceNames.map((name, i) => (
+                                <span key={i} className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)',marginRight:3}}>{name}</span>
+                              ))
                         })()}
                       </td>
                       <td><span className="tag blue">v{doc.version}</span></td>
@@ -733,7 +775,7 @@ export default function AdminPage() {
                         </button>
                       </td>
                       <td className="td-actions">
-                        <button className="btn btn-ghost" onClick={() => { setEditDoc(doc); setDocForm({ title: doc.title, description: doc.description || '', folder_id: doc.folder_id || '', file: null }); setUploadModal(true) }}>Modifier</button>
+                        <button className="btn btn-ghost" onClick={() => { setEditDoc(doc); setDocForm({ title: doc.title, description: doc.description || '', folder_ids: documentFoldersMap[doc.id] || [], file: null }); setDocFormService(''); setUploadModal(true) }}>Modifier</button>
                         <button className="btn btn-danger" onClick={() => deleteDocument(doc)}>Supprimer</button>
                       </td>
                     </tr>
@@ -777,15 +819,19 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {filteredFolders.map(folder => {
-                    const docCount = documents.filter(d => d.folder_id === folder.id).length
+                    const docCount = Object.values(documentFoldersMap).filter(fids => fids.includes(folder.id)).length
                     return (
                       <tr key={folder.id} className={!folder.is_active ? 'tr-inactive' : ''}>
                         <td style={{width:32}}>{folder.is_active ? '📁' : '🔒'}</td>
                         <td className="td-title">{folder.name}</td>
                         <td>
-                          {folder.service_id
-                            ? <span className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)'}}>{services.find(s => s.id === folder.service_id)?.name || '—'}</span>
-                            : <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
+                          {(folder.folder_services || []).length === 0
+                            ? <span style={{fontSize:11,color:'var(--text-light)',fontStyle:'italic'}}>Non affecté</span>
+                            : (folder.folder_services || []).map(fs => (
+                                <span key={fs.service_id} className="tag" style={{background:'var(--green-soft)',color:'var(--green-deep)',borderColor:'var(--green-border)',marginRight:3}}>
+                                  {fs.services?.name || '—'}
+                                </span>
+                              ))
                           }
                         </td>
                         <td>{docCount} document{docCount !== 1 ? 's' : ''}</td>
@@ -796,7 +842,7 @@ export default function AdminPage() {
                           </button>
                         </td>
                         <td className="td-actions">
-                          <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year, service_id: folder.service_id || '' }); setFolderModal(true) }}>Modifier</button>
+                          <button className="btn btn-ghost" onClick={() => { setEditFolder(folder); setFolderForm({ name: folder.name, year: folder.year, service_ids: folderServicesMap[folder.id] || [] }); setFolderModal(true) }}>Modifier</button>
                           <button className="btn btn-danger" onClick={() => deleteFolder(folder)}>Supprimer</button>
                         </td>
                       </tr>
@@ -1174,26 +1220,41 @@ export default function AdminPage() {
                 <textarea className="input" rows={3} placeholder="Description optionnelle" value={docForm.description} onChange={e => setDocForm(p=>({...p,description:e.target.value}))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Service <span style={{color:'var(--text-soft)',fontWeight:400}}>(optionnel — filtre les dossiers)</span></label>
-                <select className="input" value={docFormService} onChange={e => { setDocFormService(e.target.value); setDocForm(p=>({...p,folder_id:''})) }}>
-                  <option value="">— Tous les services —</option>
-                  <option value="__none__">Non affecté</option>
-                  {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Dossier <span style={{color:'var(--text-soft)',fontWeight:400}}>(optionnel)</span></label>
-                <select className="input" value={docForm.folder_id} onChange={e => setDocForm(p=>({...p,folder_id:e.target.value}))}>
-                  <option value="">— Sans dossier —</option>
+                <label className="form-label">Dossiers <span style={{color:'var(--text-soft)',fontWeight:400}}>(optionnel — plusieurs possibles)</span></label>
+                {services.length > 0 && (
+                  <select className="input" style={{marginBottom:8}} value={docFormService} onChange={e => setDocFormService(e.target.value)}>
+                    <option value="">— Filtrer par service —</option>
+                    <option value="__none__">Non affecté</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                )}
+                <div style={{display:'flex',flexDirection:'column',gap:5,background:'var(--cream)',border:'1.5px solid var(--green-border)',borderRadius:'var(--r)',padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
                   {folders
                     .filter(f => {
                       if (!docFormService) return true
-                      if (docFormService === '__none__') return !f.service_id
-                      return f.service_id === docFormService
+                      if (docFormService === '__none__') return !(folderServicesMap[f.id]?.length > 0)
+                      return (folderServicesMap[f.id] || []).includes(docFormService)
                     })
-                    .map(f => <option key={f.id} value={f.id}>{f.name}</option>)
+                    .map(f => {
+                      const sNames = (folderServicesMap[f.id] || []).map(sid => services.find(s => s.id === sid)?.name).filter(Boolean).join(', ')
+                      return (
+                        <label key={f.id} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13}}>
+                          <input type="checkbox"
+                            checked={(docForm.folder_ids || []).includes(f.id)}
+                            onChange={e => {
+                              const curr = docForm.folder_ids || []
+                              setDocForm(p => ({...p, folder_ids: e.target.checked ? [...curr, f.id] : curr.filter(id => id !== f.id)}))
+                            }}
+                            style={{width:15,height:15,accentColor:'var(--green)'}}
+                          />
+                          <span style={{fontWeight:600}}>{f.name}</span>
+                          {sNames && <span style={{fontSize:10,color:'var(--text-soft)'}}>{sNames}</span>}
+                        </label>
+                      )
+                    })
                   }
-                </select>
+                  {folders.length === 0 && <span style={{fontSize:12,color:'var(--text-light)'}}>Aucun dossier disponible</span>}
+                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Fichier PDF {editDoc && <span style={{color:'var(--text-muted)',fontWeight:400}}>(laisser vide pour ne pas modifier)</span>}</label>
@@ -1224,13 +1285,25 @@ export default function AdminPage() {
                 <input className="input" placeholder="ex: Documents 2025" value={folderForm.name} onChange={e => setFolderForm(p=>({...p,name:e.target.value}))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Service (optionnel)</label>
-                <select className="input" value={folderForm.service_id} onChange={e => setFolderForm(p=>({...p,service_id:e.target.value}))}>
-                  <option value="">— Aucun service —</option>
-                  {services.filter(s => s.is_active).map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <label className="form-label">Services <span style={{color:'var(--text-soft)',fontWeight:400}}>(optionnel — plusieurs possibles)</span></label>
+                {services.length === 0
+                  ? <p style={{fontSize:12,color:'var(--text-light)'}}>Aucun service créé.</p>
+                  : <div style={{display:'flex',flexDirection:'column',gap:6,background:'var(--cream)',border:'1.5px solid var(--green-border)',borderRadius:'var(--r)',padding:'10px 14px'}}>
+                      {services.filter(s => s.is_active).map(s => (
+                        <label key={s.id} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13}}>
+                          <input type="checkbox"
+                            checked={(folderForm.service_ids || []).includes(s.id)}
+                            onChange={e => {
+                              const curr = folderForm.service_ids || []
+                              setFolderForm(p => ({...p, service_ids: e.target.checked ? [...curr, s.id] : curr.filter(id => id !== s.id)}))
+                            }}
+                            style={{width:15,height:15,accentColor:'var(--green)'}}
+                          />
+                          <span style={{fontWeight:600}}>{s.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                }
               </div>
             </div>
             <div className="modal-footer">
