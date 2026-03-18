@@ -673,11 +673,20 @@ export default function AdminPage() {
   }
 
   async function deleteDocument(doc) {
-    if (!confirm(`Supprimer "${doc.title}" ?`)) return
+    if (!confirm(`Supprimer définitivement "${doc.title}" ? Cette action est irréversible.`)) return
     try {
-      await supabase.storage.from('pdfs').remove([doc.file_path])
-      await supabase.from('documents').update({ is_active: false }).eq('id', doc.id)
-      toast.success('Document supprimé'); loadDocuments()
+      // Supprimer les relations document_folders
+      await supabase.from('document_folders').delete().eq('document_id', doc.id)
+      // Supprimer les notifications liées
+      await supabase.from('notifications').delete().eq('document_id', doc.id)
+      // Supprimer les vues
+      await supabase.from('document_views').delete().eq('document_id', doc.id)
+      // Supprimer le fichier PDF du storage
+      if (doc.file_path) await supabase.storage.from('pdfs').remove([doc.file_path])
+      // Supprimer le document en base
+      await supabase.from('documents').delete().eq('id', doc.id)
+      toast.success('Document supprimé définitivement')
+      loadAll()
     } catch (err) { toast.error('Erreur: ' + err.message) }
   }
 
