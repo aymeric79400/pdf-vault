@@ -14,7 +14,7 @@ function SearchBar({ value, onChange, placeholder }) {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input className="filter-input" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} />
+      <input className="filter-input" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} autoComplete="off" />
       {value && <button className="filter-clear" onClick={() => onChange('')}>✕</button>}
     </div>
   )
@@ -969,7 +969,7 @@ export default function AdminPage() {
                           setEditUserForm({ full_name: u.full_name || '', username: u.username || '', email: u.email || '', phone: u.phone || '', role: u.role, is_active: u.is_active })
                           setEditUserModal(true)
                         }}>Modifier</button>
-                        <button className="btn btn-ghost" onClick={() => { setSelectedUser(u); setNewPassword(''); setPasswordModal(true) }}>
+                        <button className="btn btn-ghost" onClick={() => { setSelectedUser(u); setNewPassword(''); setPasswordModal(true); }}>
                           🔑 MDP
                         </button>
                         <button className="btn btn-ghost" style={{fontSize:11}} onClick={() => { setSelectedUserForService(u); setUserServiceModal(true) }}>🏢 Services</button>
