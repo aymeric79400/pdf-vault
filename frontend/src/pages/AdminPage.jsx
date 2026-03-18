@@ -1108,6 +1108,27 @@ export default function AdminPage() {
                   </select>
                 </div>
               </div>
+              {/* Section services */}
+              {services.length > 0 && (
+                <div className="form-group" style={{marginTop:8}}>
+                  <label className="form-label">Services accessibles <span style={{fontSize:11,color:'var(--text-light)',fontWeight:400}}>(optionnel)</span></label>
+                  <div style={{display:'flex',flexDirection:'column',gap:6,background:'var(--cream)',border:'1.5px solid var(--green-border)',borderRadius:'var(--r)',padding:'10px 14px'}}>
+                    {services.map(s => (
+                      <label key={s.id} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13}}>
+                        <input type="checkbox"
+                          checked={(userForm.services || []).includes(s.id)}
+                          onChange={e => {
+                            const curr = userForm.services || []
+                            setUserForm(p => ({...p, services: e.target.checked ? [...curr, s.id] : curr.filter(id => id !== s.id)}))
+                          }}
+                          style={{width:15,height:15,accentColor:'var(--green)'}}
+                        />
+                        <span style={{fontWeight:600}}>{s.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setUserModal(false)}>Annuler</button>
