@@ -1085,20 +1085,20 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Nom complet</label>
-                  <input className="input" placeholder="Dupont Jean" value={userForm.full_name} onChange={e => setUserForm(p=>({...p,full_name:formatFullName(e.target.value)}))} />
+                  <input className="input" placeholder="Dupont Jean" value={userForm.full_name} onChange={e => setUserForm(p=>({...p,full_name:formatFullName(e.target.value)}))} autoComplete="off" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email de contact <span style={{fontSize:11,color:'var(--text-light)',fontWeight:400}}>(optionnel — pour les notifications)</span></label>
-                  <input className="input" type="email" placeholder="jean@exemple.com" value={userForm.email} onChange={e => setUserForm(p=>({...p,email:e.target.value}))} />
+                  <input className="input" type="email" placeholder="jean@exemple.com" value={userForm.email} onChange={e => setUserForm(p=>({...p,email:e.target.value}))} autoComplete="off" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
-                  <input className="input" type="tel" placeholder="06 12 34 56 78" value={userForm.phone} onChange={e => setUserForm(p=>({...p,phone:formatPhone(e.target.value)}))} />
+                  <input className="input" type="tel" placeholder="06 12 34 56 78" value={userForm.phone} onChange={e => setUserForm(p=>({...p,phone:formatPhone(e.target.value)}))} autoComplete="off" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Mot de passe * (min. 8 caractères)</label>
                   <div className="input-with-icon">
-                    <input className="input" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={userForm.password} onChange={e => setUserForm(p=>({...p,password:e.target.value}))} />
+                    <input className="input" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={userForm.password} onChange={e => setUserForm(p=>({...p,password:e.target.value}))} autoComplete="new-password" />
                     <button className="input-icon-btn" onClick={() => setShowPassword(p => !p)} type="button">{showPassword ? '🙈' : '👁️'}</button>
                   </div>
                 </div>
