@@ -449,15 +449,17 @@ export default function AdminPage() {
 
   async function deleteUser(user) {
     if (user.id === currentProfile?.id) { toast.error('Vous ne pouvez pas supprimer votre propre compte'); return }
-    if (!confirm(`Supprimer définitivement l'utilisateur "${user.email}" ?`)) return
+    if (!confirm(`Supprimer définitivement l'utilisateur "${user.username || user.full_name}" ?`)) return
     // Retrait immédiat de l'UI
     setUsers(prev => prev.filter(u => u.id !== user.id))
     try {
       const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || anonKey
       const res = await fetch(`${functionsUrl}/create-user`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` },
+        headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ user_id: user.id })
       })
       if (!res.ok) {
@@ -938,7 +940,7 @@ export default function AdminPage() {
                     <tr key={u.id}>
                       <td><code className="username-code">{u.username || '—'}</code></td>
                       <td className="td-title">{u.full_name || '—'}</td>
-                      <td style={{fontSize:12}}>{u.email}</td>
+                      <td style={{fontSize:12}}>{u.email && !u.email.includes('@planning-viewer.internal') ? u.email : '—'}</td>
                       <td style={{fontSize:12}}>{u.phone || '—'}</td>
                       <td><span className={`tag ${u.role === 'admin' ? 'blue' : ''}`}>{u.role}</span></td>
                       <td>{format(new Date(u.created_at), 'dd/MM/yyyy', { locale: fr })}</td>
