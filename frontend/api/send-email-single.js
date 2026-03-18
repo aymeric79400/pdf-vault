@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     const firstName = full_name?.trim().split(/\s+/).pop() || null
     const subject = `[Planning Viewer] Test - ${document.title}`
-    const textContent = `Bonjour ${firstName || ''},\n\n[MAIL DE TEST]\n\n${document.title}${document.folder_name ? ' - ' + document.folder_name : ''} est disponible sur ${APP_URL}/dashboard\n\n--\nPlanning Viewer`
+    const textContent = `Bonjour ${firstName || ''},\n\n[MAIL DE TEST]\n\n${document.title}${document.folder_name ? ' - ' + document.folder_name : ''} est disponible sur Planning Viewer.\n\n--\nPlanning Viewer`
 
     await transporter.sendMail({
       from: `Planning Viewer <${process.env.SMTP_USER}>`,
