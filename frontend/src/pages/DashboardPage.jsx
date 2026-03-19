@@ -330,11 +330,11 @@ export default function DashboardPage() {
   }
 
   async function openDocument(doc) {
-    navigate(`/viewer/${doc.id}`)
     if (newDocStatus[doc.id]) {
-      await supabase.rpc('mark_document_viewed', { doc_id: doc.id }).catch(() => {})
       setNewDocStatus(prev => ({ ...prev, [doc.id]: false }))
+      supabase.rpc('mark_document_viewed', { doc_id: doc.id }).catch(() => {})
     }
+    navigate(`/viewer/${doc.id}`)
   }
 
   const filteredDocs = documents.filter(doc => {
