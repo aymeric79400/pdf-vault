@@ -517,24 +517,24 @@ export default function AdminPage() {
   // ── DOCUMENTS ──
 
   // Envoie un email de notification via l'Edge Function
-  async function sendDocumentEmail(type, document) {
+  async function sendDocumentEmail(type, document, service_ids = []) {
     try {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, document }),
+        body: JSON.stringify({ type, document, service_ids }),
       })
     } catch (err) {
       console.warn('Email notification failed (non-blocking):', err)
     }
   }
 
-  async function sendPushNotification(type, document) {
+  async function sendPushNotification(type, document, service_ids = []) {
     try {
       await fetch('/api/send-push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, document }),
+        body: JSON.stringify({ type, document, service_ids }),
       })
     } catch (err) {
       console.warn('Push notification failed (non-blocking):', err)
@@ -622,8 +622,9 @@ export default function AdminPage() {
       }
       toast.success('Document publié !')
       const folderName = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
-      await sendDocumentEmail('new_document', { title: docForm.title, description: docForm.description || '', folder_name: folderName })
-      await sendPushNotification('new_document', { title: docForm.title, folder_name: folderName })
+      const notifServiceIds = [...new Set((docForm.folder_ids || []).flatMap(fid => folderServicesMap[fid] || []))]
+      await sendDocumentEmail('new_document', { title: docForm.title, description: docForm.description || '', folder_name: folderName }, notifServiceIds)
+      await sendPushNotification('new_document', { title: docForm.title, folder_name: folderName }, notifServiceIds)
       setUploadModal(false); setDocForm({ title: '', description: '', folder_ids: [], file: null }); setDocFormService('')
       loadAll()
     } catch (err) { toast.error('Erreur: ' + err.message) }
@@ -664,8 +665,9 @@ export default function AdminPage() {
           title: '🔄 Document mis à jour', message: `"${docForm.title || editDoc.title}" a été mis à jour`,
         })))
         const folderName = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
-        await sendDocumentEmail('updated_document', { title: docForm.title || editDoc.title, description: docForm.description || '', folder_name: folderName })
-        await sendPushNotification('updated_document', { title: docForm.title || editDoc.title, folder_name: folderName })
+        const notifServiceIdsUpd = [...new Set((docForm.folder_ids || []).flatMap(fid => folderServicesMap[fid] || []))]
+        await sendDocumentEmail('updated_document', { title: docForm.title || editDoc.title, description: docForm.description || '', folder_name: folderName }, notifServiceIdsUpd)
+        await sendPushNotification('updated_document', { title: docForm.title || editDoc.title, folder_name: folderName }, notifServiceIdsUpd)
       }
       toast.success('Document mis à jour')
       setEditDoc(null); setDocForm({ title: '', description: '', folder_ids: [], file: null }); setDocFormService('')
