@@ -183,16 +183,16 @@ const CalIcon = () => (
   </svg>
 )
 
-const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents, isAdmin, navigate, profile, signOut, onClose }) => (
+const SidebarContent = ({ selectedFolder, setSelectedFolder, folders, documents, isAdmin, navigate, profile, signOut, onClose, hideHeader }) => (
   <>
-    <div className="sidebar-logo">
+    {!hideHeader && <div className="sidebar-logo">
       <LogoIcon />
       <div>
         <div className="sidebar-brand">Planning Viewer</div>
         <div className="sidebar-brand-sub">SOIGNON · EURIAL</div>
       </div>
-    </div>
-    <div className="sidebar-stripe" />
+    </div>}
+    {!hideHeader && <div className="sidebar-stripe" />}
     <nav className="sidebar-nav">
       <div className="nav-section-label">Documents</div>
       <button className={`nav-item ${!selectedFolder ? 'active' : ''}`} onClick={() => { setSelectedFolder(null); onClose?.() }}>
@@ -390,6 +390,7 @@ export default function DashboardPage() {
           folders={folders} documents={documents} isAdmin={isAdmin}
           navigate={navigate} profile={profile} signOut={signOut}
           onClose={() => setShowMobileMenu(false)}
+          hideHeader={true}
         />
       </div>
 
