@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    const { type, document } = req.body
+    const { type, document, service_ids } = req.body
     if (!type || !document) return res.status(400).json({ error: 'Missing params' })
 
     const supabase = createClient(
@@ -26,10 +26,25 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     )
 
-    // Récupérer toutes les souscriptions push actives
-    const { data: subs, error } = await supabase
-      .from('push_subscriptions')
-      .select('endpoint, p256dh, auth')
+    // Déterminer les user_ids autorisés selon les services du document
+    let authorizedUserIds = null
+    if (service_ids && service_ids.length > 0) {
+      const { data: userServices } = await supabase
+        .from('user_services')
+        .select('user_id')
+        .in('service_id', service_ids)
+      if (userServices) {
+        authorizedUserIds = userServices.map(r => r.user_id)
+      }
+    }
+
+    // Récupérer les souscriptions push — filtrées par service si applicable
+    let query = supabase.from('push_subscriptions').select('endpoint, p256dh, auth, user_id')
+    if (authorizedUserIds !== null) {
+      if (authorizedUserIds.length === 0) return res.status(200).json({ message: 'No authorized users' })
+      query = query.in('user_id', authorizedUserIds)
+    }
+    const { data: subs, error } = await query
 
     if (error || !subs?.length) {
       return res.status(200).json({ message: 'No subscriptions' })
