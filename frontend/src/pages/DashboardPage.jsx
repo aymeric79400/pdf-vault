@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -257,11 +257,17 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [userServiceIds, setUserServiceIds] = useState(null) // null = admin (tout voir)
 
+  const hasLoadedNewDocStatus = useRef(false)
+
   useEffect(() => {
     if (profile === null && !isAdmin) return // Attendre que le profil soit chargé
     loadData()
-    loadNewDocStatus()
-    requestPushPermission().then(granted => { if (granted) subscribePush() })
+    // Charger le statut nouveaux docs seulement au premier chargement ou changement de profil
+    if (!hasLoadedNewDocStatus.current) {
+      loadNewDocStatus()
+      hasLoadedNewDocStatus.current = true
+      requestPushPermission().then(granted => { if (granted) subscribePush() })
+    }
   }, [location.key, profile?.id, isAdmin])
 
   async function loadData() {
@@ -330,9 +336,13 @@ export default function DashboardPage() {
   }
 
   async function openDocument(doc) {
+    // Marquer comme lu en base d'abord (await), puis naviguer
     if (newDocStatus[doc.id]) {
+      try {
+        await supabase.rpc('mark_document_viewed', { doc_id: doc.id })
+      } catch(e) {}
+      // Mettre à jour l'état local après la base
       setNewDocStatus(prev => ({ ...prev, [doc.id]: false }))
-      supabase.rpc('mark_document_viewed', { doc_id: doc.id }).catch(() => {})
     }
     navigate(`/viewer/${doc.id}`)
   }
