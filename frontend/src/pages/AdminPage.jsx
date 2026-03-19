@@ -610,14 +610,23 @@ export default function AdminPage() {
         )
       }
 
-      // Notifications in-app
-      const { data: activeUsers } = await supabase.from('profiles').select('id').eq('is_active', true).eq('role', 'user')
-      if (activeUsers?.length) {
-        const folderNames = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
-        await supabase.from('notifications').insert(activeUsers.map(u => ({
-          user_id: u.id, type: 'new_document',
+      // Notifications in-app — filtrées par service
+      const notifFolderNames = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
+      const notifSvcIds = [...new Set((docForm.folder_ids || []).flatMap(fid => folderServicesMap[fid] || []))]
+      let targetUserIds = []
+      if (notifSvcIds.length > 0) {
+        const { data: us } = await supabase.from('user_services').select('user_id').in('service_id', notifSvcIds)
+        targetUserIds = [...new Set((us || []).map(r => r.user_id))]
+      } else {
+        // pas de service → notifier tout le monde
+        const { data: au } = await supabase.from('profiles').select('id').eq('is_active', true).eq('role', 'user')
+        targetUserIds = (au || []).map(u => u.id)
+      }
+      if (targetUserIds.length > 0) {
+        await supabase.from('notifications').insert(targetUserIds.map(uid => ({
+          user_id: uid, type: 'new_document',
           title: '📄 Nouveau document disponible',
-          message: `"${docForm.title}" a été publié${folderNames ? ' dans ' + folderNames : ''}`,
+          message: `"${docForm.title}" a été publié${notifFolderNames ? ' dans ' + notifFolderNames : ''}`,
         })))
       }
       toast.success('Document publié !')
