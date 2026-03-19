@@ -610,6 +610,23 @@ export default function AdminPage() {
         )
       }
 
+      // Initialiser user_document_status avec filtre par service
+      await supabase.from('user_document_status').delete().eq('document_id', newDoc.id)
+      const docServiceIds = [...new Set((docForm.folder_ids || []).flatMap(fid => folderServicesMap[fid] || []))]
+      let statusUserIds = []
+      if (docServiceIds.length > 0) {
+        const { data: us } = await supabase.from('user_services').select('user_id').in('service_id', docServiceIds)
+        statusUserIds = [...new Set((us || []).map(r => r.user_id))]
+      } else {
+        const { data: au } = await supabase.from('profiles').select('id').eq('is_active', true)
+        statusUserIds = (au || []).map(u => u.id)
+      }
+      if (statusUserIds.length > 0) {
+        await supabase.from('user_document_status').upsert(
+          statusUserIds.map(uid => ({ user_id: uid, document_id: newDoc.id, is_new: true }))
+        )
+      }
+
       // Notifications in-app — filtrées par service
       const notifFolderNames = (docForm.folder_ids || []).map(fid => folders.find(f => f.id === fid)?.name).filter(Boolean).join(', ')
       const notifSvcIds = [...new Set((docForm.folder_ids || []).flatMap(fid => folderServicesMap[fid] || []))]
