@@ -77,19 +77,38 @@ export default async function handler(req, res) {
 
 
 
-    const { type, document } = req.body
+    const { type, document, service_ids } = req.body
     if (!type || !document) return res.status(400).json({ error: 'Missing type or document' })
 
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     )
-    const { data: users, error } = await supabase
+
+    // Déterminer les user_ids autorisés selon les services du document
+    let authorizedUserIds = null
+    if (service_ids && service_ids.length > 0) {
+      const { data: userServices } = await supabase
+        .from('user_services')
+        .select('user_id')
+        .in('service_id', service_ids)
+      if (userServices) {
+        authorizedUserIds = userServices.map(r => r.user_id)
+      }
+    }
+
+    // Récupérer les utilisateurs avec email — filtrés par service si applicable
+    let query = supabase
       .from('profiles')
-      .select('email, full_name')
+      .select('id, email, full_name')
       .eq('is_active', true)
       .not('email', 'is', null)
       .neq('email', '')
+    if (authorizedUserIds !== null) {
+      if (authorizedUserIds.length === 0) return res.status(200).json({ message: 'No authorized users' })
+      query = query.in('id', authorizedUserIds)
+    }
+    const { data: users, error } = await query
     if (error || !users?.length) {
       return res.status(400).json({ error: 'No recipients', detail: error })
     }
