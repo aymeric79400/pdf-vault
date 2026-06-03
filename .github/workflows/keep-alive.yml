@@ -2,23 +2,27 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 8 */2 * *'
+    - cron: '0 8 */3 * *'  # Toutes les 72h (plus fiable que 48h)
   workflow_dispatch:
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Ping Supabase Database
+      - name: Ping Supabase REST API
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "Testing Supabase connection..."
-
-          psql "$DATABASE_URL" -c "SELECT NOW();"
-
-          echo "Supabase database successfully pinged."
+          echo "Pinging Supabase REST API..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/profiles?select=count" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "✅ Supabase est actif et répond correctement."
+          else
+            echo "❌ Réponse inattendue : HTTP $STATUS"
+            exit 1
+          fi
