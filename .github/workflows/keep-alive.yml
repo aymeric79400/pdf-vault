@@ -1,35 +1,24 @@
-name: Keep Alive
+name: Keep Supabase Alive
 
 on:
   schedule:
-    # Toutes les 48h — 8h00 UTC les jours pairs
     - cron: '0 8 */2 * *'
   workflow_dispatch:
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Ping Supabase
+      - name: Ping Supabase Database
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X GET \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/services?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
-          echo "Supabase ping status: $STATUS"
+          echo "Testing Supabase connection..."
 
-      - name: Commit automatique
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "$(date -u)" > .keep-alive
-          git add .keep-alive
-          git commit -m "chore: keep-alive $(date -u '+%Y-%m-%d')"
-          git push
+          psql "$DATABASE_URL" -c "SELECT NOW();"
+
+          echo "Supabase database successfully pinged."
