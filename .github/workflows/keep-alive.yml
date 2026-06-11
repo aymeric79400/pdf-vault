@@ -2,7 +2,7 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 8 */3 * *'  # Toutes les 72h (plus fiable que 48h)
+    - cron: '0 8 */2 * *'  # Toutes les 48h
   workflow_dispatch:
 
 jobs:
@@ -15,14 +15,34 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           echo "Pinging Supabase REST API..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "$SUPABASE_URL/rest/v1/profiles?select=count" \
+
+          # Requête 1 : lecture sur profiles (limite 1 ligne réelle)
+          STATUS1=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/profiles?select=id&limit=1" \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY")
-          echo "HTTP status: $STATUS"
-          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+          echo "profiles → HTTP $STATUS1"
+
+          # Requête 2 : lecture sur documents
+          STATUS2=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/documents?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "documents → HTTP $STATUS2"
+
+          # Requête 3 : lecture sur services
+          STATUS3=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/services?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "services → HTTP $STATUS3"
+
+          # Vérification globale
+          if [ "$STATUS1" -ge 200 ] && [ "$STATUS1" -lt 300 ] && \
+             [ "$STATUS2" -ge 200 ] && [ "$STATUS2" -lt 300 ] && \
+             [ "$STATUS3" -ge 200 ] && [ "$STATUS3" -lt 300 ]; then
             echo "✅ Supabase est actif et répond correctement."
           else
-            echo "❌ Réponse inattendue : HTTP $STATUS"
+            echo "❌ Une ou plusieurs requêtes ont échoué."
             exit 1
           fi
